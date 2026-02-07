@@ -1,0 +1,37 @@
+{
+  "examples": [
+    {
+      "user_input": "open firefox",
+      "intent": {
+        "action": "launch",
+        "target_type": "application",
+        "target": "firefox",
+        "confidence": 0.95
+      }
+    },
+    {
+      "user_input": "move all PDFs from Downloads to Documents",
+      "intent": {
+        "action": "move",
+        "target_type": "file",
+        "target": "*.pdf",
+        "source": "~/Downloads",
+        "destination": "~/Documents",
+        "confirmation_required": true,
+        "confidence": 0.92
+      }
+    },
+    {
+      "user_input": "find my tax documents",
+      "intent": {
+        "action": "find",
+        "target_type": "file",
+        "target": "tax",
+        "filters": {
+          "type": "document"
+        },
+        "confidence": 0.88
+      }
+    }
+  ]
+}

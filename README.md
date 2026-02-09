@@ -1,4 +1,4 @@
-# 🦡 Stoat
+# Stoat 🦡 
 
 **Offline AI Assistant for Linux** - Smart, Quick, Local
 

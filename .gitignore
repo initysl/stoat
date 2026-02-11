@@ -61,3 +61,6 @@ config/local.toml
 # Type/lint caches
 .mypy_cache/
 .ruff_cache/
+
+# Add to .gitignore
+models/*.gguf

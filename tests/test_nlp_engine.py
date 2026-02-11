@@ -30,6 +30,22 @@ def test_parse_alias_normalization() -> None:
     assert intent.target == "google-chrome"
 
 
+def test_parse_calendar_alias_normalization() -> None:
+    engine = NLPEngine()
+    intent = engine.parse("open calendar")
+
+    assert intent.action == IntentAction.LAUNCH_APP
+    assert intent.target == "gnome-calendar"
+
+
+def test_parse_common_typo_calender_normalization() -> None:
+    engine = NLPEngine()
+    intent = engine.parse("open calender")
+
+    assert intent.action == IntentAction.LAUNCH_APP
+    assert intent.target == "gnome-calendar"
+
+
 def test_parse_unknown_intent() -> None:
     engine = NLPEngine()
     intent = engine.parse("tell me a joke")

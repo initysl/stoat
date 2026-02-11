@@ -20,6 +20,7 @@ rapidfuzz = "^3.6.0"
 structlog = "^24.1.0"
 python-dotenv = "^1.0.0"
 toml = "^0.10.2"
+llama-cpp-python = "^0.3.16"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"

@@ -16,9 +16,21 @@ class NLPEngine:
     _APP_ALIASES: dict[str, str] = {
         "chrome": "google-chrome",
         "google chrome": "google-chrome",
+        "browser": "firefox",
         "vscode": "code",
         "visual studio code": "code",
         "terminal": "gnome-terminal",
+        "calendar": "gnome-calendar",
+        "calculator": "gnome-calculator",
+        "files": "nautilus",
+        "file manager": "nautilus",
+        "settings": "gnome-control-center",
+        "text editor": "gedit",
+    }
+    _COMMON_TYPOS: dict[str, str] = {
+        "calender": "calendar",
+        "firefix": "firefox",
+        "chorme": "chrome",
     }
 
     def parse(self, text: str) -> Intent:
@@ -60,6 +72,9 @@ class NLPEngine:
         ignored_tokens = {"app", "application", "window", "windows"}
         filtered_tokens = [token for token in target.split() if token.lower() not in ignored_tokens]
         target = " ".join(filtered_tokens)
+        if not target:
+            return ""
 
-        alias_key = target.lower()
+        alias_key = target.lower().strip()
+        alias_key = self._COMMON_TYPOS.get(alias_key, alias_key)
         return self._APP_ALIASES.get(alias_key, target)

@@ -1,80 +1,141 @@
-# """Rule-based NLP parser for MVP command understanding."""
+import json
+import re
+from pathlib import Path
+from typing import Optional
+from llama_cpp import Llama
 
-# from __future__ import annotations
-
-# import re
-
-# from stoat.core.intent_schema import Intent, IntentAction
+from stoat.core.intent_schema import Intent, IntentParseError, LowConfidenceError
+from stoat.prompts.system_prompt import build_prompt
 
 
-# class NLPEngine:
-#     """Parses natural language text into structured intents."""
+class NLPEngine:
+    """Natural Language Processing engine for intent parsing"""
+    
+    def __init__(
+        self,
+        model_path: Optional[Path] = None,
+        confidence_threshold: float = 0.7,
+        temperature: float = 0.1,
+        max_tokens: int = 512,
+    ):
+        """
+        Initialize the NLP engine
+        Args:
+            model_path: Path to the GGUF model file
+            confidence_threshold: Minimum confidence score to accept
+            temperature: LLM temperature (lower = more deterministic)
+            max_tokens: Maximum tokens to generate
+        """
+        if model_path is None:
+            # Default to models directory in project root
+            project_root = Path(__file__).parent.parent.parent
+            model_path = project_root / "models" / "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
+        
+        if not model_path.exists():
+            raise FileNotFoundError(
+                f"Model file not found at {model_path}\n"
+                f"Download it with:\n"
+                f"wget https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf"
+            )
+        
+        self.model_path = model_path
+        self.confidence_threshold = confidence_threshold
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        
+        # Initialize the model
+        print(f"Loading model from {model_path}...")
+        self.llm = Llama(
+            model_path=str(model_path),
+            n_ctx=1024,          # Increased from 512
+            n_threads=2,
+            n_batch=128,
+            verbose=False,       # Turn off verbose now
+        )
+        print("Model loaded successfully!")
+    
+    def parse_intent(self, user_command: str) -> Intent:
+        """
+        Parse user command into structured intent
+        Args:
+            user_command: Natural language command from user
+        Returns:
+            Intent object with parsed information
+        Raises:
+            IntentParseError: If parsing fails
+            LowConfidenceError: If confidence is below threshold
+        """
+        # Build the prompt
+        prompt = build_prompt(user_command)
+        
+        # Get response from LLM
+        response = self.llm(
+            prompt,
+            max_tokens=256,      # Reduced from 512
+            temperature=0.1,
+            stop=["User:", "\n\n", "}"],  # Add } to stop after JSON
+            echo=False,
+        )
+        
+        # Extract the generated text
+        raw_output = response["choices"][0]["text"].strip() # type: ignore
+        
+        # Parse JSON from response
+        try:
+            intent_data = self._extract_json(raw_output)
+            intent = Intent(**intent_data)
+        except (json.JSONDecodeError, ValueError) as e:
+            raise IntentParseError(f"Failed to parse intent: {e}\nRaw output: {raw_output}")
+        
+        # Check confidence threshold
+        if intent.confidence < self.confidence_threshold:
+            raise LowConfidenceError(intent.confidence, self.confidence_threshold)
+        
+        return intent
+    
+    def _extract_json(self, text: str) -> dict:
+        """
+        Extract JSON from LLM response, handling common issues
+        Args:
+            text: Raw text from LLM
+        Returns:
+            Parsed JSON dictionary
+        """
+        # Try direct JSON parse first
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+        
+        # Try to extract JSON from markdown code blocks
+        json_match = re.search(r'```json\s*(\{.*?\})\s*```', text, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group(1))
+        
+        # Try to find JSON object in text
+        json_match = re.search(r'\{.*\}', text, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group(0))
+        
+        raise ValueError(f"No valid JSON found in response: {text}")
+    
+    def test_connection(self) -> bool:
+        """Test if the model is working"""
+        try:
+            test_intent = self.parse_intent("open firefox")
+            return test_intent.action == "launch" and "firefox" in test_intent.target.lower()
+        except Exception as e:
+            print(f"Test failed: {e}")
+            return False
 
-#     _LAUNCH_RE = re.compile(r"^(?:open|launch|start|run)\s+(.+)$", re.IGNORECASE)
-#     _CLOSE_RE = re.compile(r"^(?:close|quit|stop)\s+(.+)$", re.IGNORECASE)
 
-#     _APP_ALIASES: dict[str, str] = {
-#         "chrome": "google-chrome",
-#         "google chrome": "google-chrome",
-#         "browser": "firefox",
-#         "vscode": "code",
-#         "visual studio code": "code",
-#         "terminal": "gnome-terminal",
-#         "calendar": "gnome-calendar",
-#         "calculator": "gnome-calculator",
-#         "files": "nautilus",
-#         "file manager": "nautilus",
-#         "settings": "gnome-control-center",
-#         "text editor": "gedit",
-#     }
-#     _COMMON_TYPOS: dict[str, str] = {
-#         "calender": "calendar",
-#         "firefix": "firefox",
-#         "chorme": "chrome",
-#     }
+# Singleton instance
+_engine: Optional[NLPEngine] = None
 
-#     def parse(self, text: str) -> Intent:
-#         """Parse free text into a known intent."""
-#         cleaned = " ".join(text.strip().split())
-#         if not cleaned:
-#             return Intent(action=IntentAction.UNKNOWN, raw_text=text, confidence=0.0)
 
-#         launch_match = self._LAUNCH_RE.match(cleaned)
-#         if launch_match:
-#             target = self._normalize_target(launch_match.group(1))
-#             if target:
-#                 return Intent(
-#                     action=IntentAction.LAUNCH_APP,
-#                     raw_text=text,
-#                     target=target,
-#                     confidence=0.96,
-#                 )
-
-#         close_match = self._CLOSE_RE.match(cleaned)
-#         if close_match:
-#             target = self._normalize_target(close_match.group(1))
-#             if target:
-#                 return Intent(
-#                     action=IntentAction.CLOSE_APP,
-#                     raw_text=text,
-#                     target=target,
-#                     confidence=0.94,
-#                     requires_confirmation=True,
-#                 )
-
-#         return Intent(action=IntentAction.UNKNOWN, raw_text=text, confidence=0.1)
-
-#     def _normalize_target(self, raw_target: str) -> str:
-#         target = " ".join(raw_target.strip().split())
-#         if not target:
-#             return ""
-
-#         ignored_tokens = {"app", "application", "window", "windows"}
-#         filtered_tokens = [token for token in target.split() if token.lower() not in ignored_tokens]
-#         target = " ".join(filtered_tokens)
-#         if not target:
-#             return ""
-
-#         alias_key = target.lower().strip()
-#         alias_key = self._COMMON_TYPOS.get(alias_key, alias_key)
-#         return self._APP_ALIASES.get(alias_key, target)
+def get_engine() -> NLPEngine:
+    """Get or create the global NLP engine instance"""
+    global _engine
+    if _engine is None:
+        _engine = NLPEngine()
+    return _engine

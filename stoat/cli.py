@@ -70,9 +70,59 @@ def _build_parser(config: Config) -> NLPEngine:
     )
 
 
-def _emit_result(success: bool, message: str, details: dict, json_output: bool) -> None:
+def _build_json_response(
+    success: bool,
+    message: str,
+    details: dict,
+    *,
+    command: str,
+    action: str | None,
+    dry_run: bool,
+) -> dict:
+    error_code = details.get("error_code")
+    payload_details = {
+        key: value
+        for key, value in details.items()
+        if key not in {"action", "error_code", "dry_run"}
+    }
+    return {
+        "ok": success,
+        "command": command,
+        "action": action,
+        "dry_run": dry_run,
+        "message": message,
+        "data": payload_details if success else None,
+        "error": (
+            None
+            if success
+            else {
+                "code": error_code or "command_failed",
+                "details": payload_details or None,
+            }
+        ),
+    }
+
+
+def _emit_result(
+    success: bool,
+    message: str,
+    details: dict,
+    json_output: bool,
+    *,
+    command: str,
+    action: str | None = None,
+    dry_run: bool = False,
+) -> None:
     if json_output:
-        click.echo(json.dumps({"success": success, "message": message, "details": details}))
+        response = _build_json_response(
+            success,
+            message,
+            details,
+            command=command,
+            action=action or details.get("action"),
+            dry_run=dry_run or bool(details.get("dry_run")),
+        )
+        click.echo(json.dumps(response, indent=2))
         return
 
     style = "bold green" if success else "bold red"
@@ -105,13 +155,17 @@ def _execute_intent(
     router: CommandRouter,
     safety: SafetyValidator,
     json_output: bool,
+    command: str,
 ) -> int:
     if intent.action == IntentAction.UNKNOWN:
         _emit_result(
             False,
             'I could not map that request yet. Try: `stoat run "open firefox"`.',
-            {"action": intent.action.value},
+            {"action": intent.action.value, "error_code": "unknown_intent"},
             json_output,
+            command=command,
+            action=intent.action.value,
+            dry_run=context.dry_run,
         )
         return 1
 
@@ -119,12 +173,28 @@ def _execute_intent(
         confirmer = ConfirmationPrompt()
         confirmed = confirmer.ask(_summarize_confirmation(intent, context))
         if not confirmed:
-            _emit_result(False, "Action cancelled.", {"action": intent.action.value}, json_output)
+            _emit_result(
+                False,
+                "Action cancelled.",
+                {"action": intent.action.value, "error_code": "cancelled"},
+                json_output,
+                command=command,
+                action=intent.action.value,
+                dry_run=context.dry_run,
+            )
             return 1
         context = context.with_confirmation()
 
     result = router.route(intent, context)
-    _emit_result(result.success, result.message, result.details, json_output)
+    _emit_result(
+        result.success,
+        result.message,
+        result.details,
+        json_output,
+        command=command,
+        action=intent.action.value,
+        dry_run=context.dry_run,
+    )
     return 0 if result.success else 1
 
 
@@ -152,12 +222,25 @@ def run(message: str, yes: bool, dry_run: bool, json_output: bool) -> None:
     try:
         intent = parser.parse(message)
     except Exception as exc:
-        _emit_result(False, f"Failed to parse command: {exc}", {"action": "parse"}, json_output)
+        _emit_result(
+            False,
+            f"Failed to parse command: {exc}",
+            {"action": "parse", "error_code": "parse_error"},
+            json_output,
+            command="run",
+            action="parse",
+            dry_run=dry_run,
+        )
         raise SystemExit(1)
 
     raise SystemExit(
         _execute_intent(
-            intent, context=context, router=router, safety=safety, json_output=json_output
+            intent,
+            context=context,
+            router=router,
+            safety=safety,
+            json_output=json_output,
+            command="run",
         )
     )
 
@@ -183,7 +266,12 @@ def undo(yes: bool, json_output: bool) -> None:
     )
     raise SystemExit(
         _execute_intent(
-            intent, context=context, router=router, safety=safety, json_output=json_output
+            intent,
+            context=context,
+            router=router,
+            safety=safety,
+            json_output=json_output,
+            command="undo",
         )
     )
 
@@ -220,7 +308,14 @@ def history(limit: int, json_output: bool) -> None:
     }
 
     if json_output:
-        _emit_result(True, "History loaded.", details, json_output=True)
+        _emit_result(
+            True,
+            "History loaded.",
+            details,
+            json_output=True,
+            command="history",
+            action="history",
+        )
         return
 
     if not operations:

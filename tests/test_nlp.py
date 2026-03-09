@@ -97,6 +97,40 @@ def test_parse_saved_file_reference() -> None:
     assert intent.filters.name_contains == "abc"
 
 
+def test_parse_where_is_recent_doc_request() -> None:
+    engine = NLPEngine(enable_llm_fallback=False)
+
+    intent = engine.parse("where's that doc i edited recently")
+
+    assert intent.action == IntentAction.FIND
+    assert intent.filters is not None
+    assert intent.filters.sort_by == "modified"
+    assert intent.filters.descending is True
+    assert intent.filters.modified_within_days == 7
+    assert ".pdf" in (intent.filters.extensions or [])
+
+
+def test_parse_show_me_last_week_query() -> None:
+    engine = NLPEngine(enable_llm_fallback=False)
+
+    intent = engine.parse("show me files containing invoice from last week")
+
+    assert intent.action == IntentAction.FIND
+    assert intent.filters is not None
+    assert intent.filters.name_contains == "invoice"
+    assert intent.filters.modified_within_days == 7
+
+
+def test_parse_file_named_reference() -> None:
+    engine = NLPEngine(enable_llm_fallback=False)
+
+    intent = engine.parse("i saved a file named tax_report, find it")
+
+    assert intent.action == IntentAction.FIND
+    assert intent.filters is not None
+    assert intent.filters.name_contains == "tax_report"
+
+
 def test_llm_fallback_used_for_unknown_command(monkeypatch) -> None:
     engine = NLPEngine(enable_llm_fallback=True)
 

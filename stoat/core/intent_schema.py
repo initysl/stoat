@@ -38,6 +38,7 @@ class FileFilters(BaseModel):
     sort_by: str | None = None
     descending: bool = False
     limit: int | None = None
+    modified_within_days: int | None = None
 
 
 class Intent(BaseModel):

@@ -115,8 +115,11 @@ def test_cli_json_output_is_stable(monkeypatch, sample_files) -> None:
     payload = json.loads(result.stdout)
 
     assert result.exit_code == 0
-    assert payload["success"] is True
-    assert payload["details"]["action"] == "find"
+    assert result.stdout.startswith("{\n")
+    assert payload["ok"] is True
+    assert payload["command"] == "run"
+    assert payload["action"] == "find"
+    assert payload["data"]["count"] >= 1
 
 
 def test_cli_dry_run_does_not_modify_files(monkeypatch, sample_files) -> None:
@@ -131,7 +134,8 @@ def test_cli_dry_run_does_not_modify_files(monkeypatch, sample_files) -> None:
     payload = json.loads(result.stdout)
 
     assert result.exit_code == 0
-    assert payload["details"]["dry_run"] is True
+    assert payload["ok"] is True
+    assert payload["dry_run"] is True
     assert (sample_files / "test.txt").exists() is True
 
 
@@ -176,9 +180,30 @@ def test_cli_history_json_output(monkeypatch, sample_files) -> None:
     payload = json.loads(result.stdout)
 
     assert result.exit_code == 0
-    assert payload["success"] is True
-    assert payload["details"]["count"] == 1
-    assert payload["details"]["operations"][0]["action"] == "delete"
+    assert payload["ok"] is True
+    assert payload["command"] == "history"
+    assert payload["action"] == "history"
+    assert payload["data"]["count"] == 1
+    assert payload["data"]["operations"][0]["action"] == "delete"
+
+
+def test_cli_json_failure_shape(monkeypatch, sample_files) -> None:
+    monkeypatch.chdir(sample_files)
+    monkeypatch.setattr(
+        "stoat.cli.Config.load",
+        classmethod(lambda cls, config_path=None: _test_config(sample_files)),
+    )
+
+    result = runner.invoke(app, ["run", "--json", "please optimize my machine"])
+
+    payload = json.loads(result.stdout)
+
+    assert result.exit_code == 1
+    assert payload["ok"] is False
+    assert payload["command"] == "run"
+    assert payload["action"] == "unknown"
+    assert payload["data"] is None
+    assert payload["error"]["code"] == "unknown_intent"
 
 
 def test_cli_history_empty_state(monkeypatch, sample_files) -> None:

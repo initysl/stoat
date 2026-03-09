@@ -189,6 +189,10 @@ class NLPEngine:
         cleaned = value.strip().strip("\"'")
         return re.sub(r"\s+", " ", cleaned)
 
+    def _trim_noise(self, value: str) -> str:
+        cleaned = re.sub(r"\b(from|in|at|on)\s*$", "", value, flags=re.IGNORECASE)
+        return re.sub(r"\s+", " ", cleaned).strip(" ,")
+
     def _normalize_file_query(self, value: str) -> str:
         query = self._clean_target_phrase(value)
         lowered = query.lower()
@@ -219,8 +223,13 @@ class NLPEngine:
         conversational_patterns = (
             r"^(?:i(?:'m| am)?\s+)?(?:looking|searching|trying)\s+for\s+(.+)$",
             r"^(?:i(?:'m| am)?\s+)?finding\s+(.+)$",
+            r"^(?:can you\s+)?find\s+me\s+(.+)$",
+            r"^(?:can you\s+)?show me\s+(.+)$",
+            r"^where(?:'s| is)\s+(.+)$",
             r"^i\s+saved\s+(?:a\s+)?file\s+as\s+(.+?),\s*find\s+it$",
             r"^i\s+saved\s+(?:a\s+)?file\s+as\s+(.+?)\s+find\s+it$",
+            r"^i\s+saved\s+(?:a\s+)?file\s+named\s+(.+?),?\s*find\s+it$",
+            r"^i\s+saved\s+(?:a\s+)?file\s+called\s+(.+?),?\s*find\s+it$",
         )
         for pattern in conversational_patterns:
             match = re.match(pattern, text, flags=re.IGNORECASE)
@@ -234,6 +243,22 @@ class NLPEngine:
         filters = FileFilters()
         source = self._extract_source_alias(lowered)
 
+        temporal_markers = (
+            ("last week", 7),
+            ("this week", 7),
+            ("recently", 7),
+            ("yesterday", 2),
+            ("today", 1),
+            ("recent", 7),
+        )
+        for phrase, days in temporal_markers:
+            if phrase in lowered:
+                lowered = re.sub(rf"\b{re.escape(phrase)}\b", "", lowered).strip()
+                query = self._clean_target_phrase(lowered)
+                filters.sort_by = "modified"
+                filters.descending = True
+                filters.modified_within_days = days
+
         for phrase in ("i last modified", "last modified", "recently modified"):
             if phrase in lowered:
                 lowered = lowered.replace(phrase, "").strip()
@@ -241,8 +266,8 @@ class NLPEngine:
                 filters.sort_by = "modified"
                 filters.descending = True
 
-        if "latest" in lowered or "newest" in lowered:
-            lowered = re.sub(r"\b(latest|newest)\b", "", lowered).strip()
+        if any(marker in lowered for marker in ("latest", "newest", "most recent")):
+            lowered = re.sub(r"\b(latest|newest|most recent)\b", "", lowered).strip()
             query = self._clean_target_phrase(lowered)
             filters.sort_by = "modified"
             filters.descending = True
@@ -256,6 +281,8 @@ class NLPEngine:
             "docs": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
             "document": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
             "documents": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
+            "file": None,
+            "files": None,
             "download": None,
             "downloads": None,
         }
@@ -266,7 +293,9 @@ class NLPEngine:
 
         containing_match = re.match(r"^(?:files?\s+)?containing\s+(.+)$", lowered)
         if containing_match:
-            filters.name_contains = self._clean_target_phrase(containing_match.group(1))
+            filters.name_contains = self._trim_noise(
+                self._clean_target_phrase(containing_match.group(1))
+            )
             return filters.name_contains or "*", filters, source
 
         extension_match = re.search(r"\b([a-z0-9]+)\s+files?$", lowered)
@@ -279,6 +308,7 @@ class NLPEngine:
                 filters.name_contains = self._clean_target_phrase(
                     prefix.removeprefix("containing ")
                 )
+                filters.name_contains = self._trim_noise(filters.name_contains or "")
                 return filters.name_contains or "*", filters, source
             query = self._clean_target_phrase(prefix)
 
@@ -321,9 +351,13 @@ class NLPEngine:
         if source == "~/Desktop":
             cleaned = re.sub(r"\bdesktop\b", "", cleaned, flags=re.IGNORECASE)
 
+        cleaned = re.sub(r"\b(that|the)\b", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(
+            r"\b(i edited|i saved|saved as|named|called)\b", "", cleaned, flags=re.IGNORECASE
+        )
         cleaned = re.sub(r"\bmy\b", "", cleaned, flags=re.IGNORECASE)
         cleaned = re.sub(r"^(?:a|an|the)\b", "", cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r"\s+", " ", cleaned).strip(" ,")
+        cleaned = self._trim_noise(cleaned)
         if source == "~/Documents" and cleaned in {"", "*"}:
             return "docs", source
         return cleaned or "*", source

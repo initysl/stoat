@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from stoat.core.intent_schema import FileFilters
@@ -103,6 +104,11 @@ class SearchEngine:
             return False
         if filters.name_contains and filters.name_contains.lower() not in path.name.lower():
             return False
+        if filters.modified_within_days is not None:
+            cutoff = datetime.now(UTC) - timedelta(days=filters.modified_within_days)
+            modified_at = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
+            if modified_at < cutoff:
+                return False
         return True
 
     def _is_visible(self, path: Path) -> bool:

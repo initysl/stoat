@@ -146,3 +146,49 @@ def test_cli_undo_without_history_fails(monkeypatch, sample_files) -> None:
 
     assert result.exit_code == 1
     assert "no stoat operation" in result.stdout.lower()
+
+
+def test_cli_history_reports_operations(monkeypatch, sample_files) -> None:
+    monkeypatch.chdir(sample_files)
+    monkeypatch.setattr(
+        "stoat.cli.Config.load",
+        classmethod(lambda cls, config_path=None: _test_config(sample_files)),
+    )
+
+    runner.invoke(app, ["run", "--yes", "delete test.txt"])
+    result = runner.invoke(app, ["history"])
+
+    assert result.exit_code == 0
+    assert "recent stoat history" in result.stdout.lower()
+    assert "delete" in result.stdout.lower()
+
+
+def test_cli_history_json_output(monkeypatch, sample_files) -> None:
+    monkeypatch.chdir(sample_files)
+    monkeypatch.setattr(
+        "stoat.cli.Config.load",
+        classmethod(lambda cls, config_path=None: _test_config(sample_files)),
+    )
+
+    runner.invoke(app, ["run", "--yes", "delete test.txt"])
+    result = runner.invoke(app, ["history", "--json"])
+
+    payload = json.loads(result.stdout)
+
+    assert result.exit_code == 0
+    assert payload["success"] is True
+    assert payload["details"]["count"] == 1
+    assert payload["details"]["operations"][0]["action"] == "delete"
+
+
+def test_cli_history_empty_state(monkeypatch, sample_files) -> None:
+    monkeypatch.chdir(sample_files)
+    monkeypatch.setattr(
+        "stoat.cli.Config.load",
+        classmethod(lambda cls, config_path=None: _test_config(sample_files)),
+    )
+
+    result = runner.invoke(app, ["history"])
+
+    assert result.exit_code == 0
+    assert "no stoat history" in result.stdout.lower()

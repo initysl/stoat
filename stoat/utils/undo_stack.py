@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime, timedelta
 import json
 from pathlib import Path
 from typing import Any
@@ -45,6 +46,24 @@ class UndoStack:
         payload = entries.pop()
         self._write_entries(entries)
         return self._from_dict(payload)
+
+    def list_recent(
+        self,
+        *,
+        limit: int | None = None,
+        retention_days: int | None = None,
+    ) -> list[UndoOperation]:
+        entries = [self._from_dict(payload) for payload in self._read_entries()]
+        if retention_days is not None:
+            cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+            entries = [
+                operation
+                for operation in entries
+                if datetime.fromisoformat(operation.created_at) >= cutoff
+            ]
+        if limit is not None:
+            entries = entries[-limit:]
+        return list(reversed(entries))
 
     def _read_entries(self) -> list[dict[str, Any]]:
         if not self._journal_path.exists():

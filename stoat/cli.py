@@ -32,6 +32,11 @@ def _resolve_skip_confirmations(yes: bool) -> bool:
     return yes or any(arg in {"--yes", "-y"} for arg in sys.argv[1:])
 
 
+def _build_undo_stack(config: Config) -> UndoStack:
+    undo_path = Path(config.undo.storage_path)
+    return UndoStack(undo_path, max_history=config.undo.max_history)
+
+
 def _build_router(config: Config) -> CommandRouter:
     search_engine = SearchEngine(
         index_hidden_files=config.search.index_hidden_files,
@@ -42,7 +47,7 @@ def _build_router(config: Config) -> CommandRouter:
     file_handler = FileOperationsHandler(
         file_system=file_system,
         trash_manager=TrashManager(undo_path),
-        undo_stack=UndoStack(undo_path, max_history=config.undo.max_history),
+        undo_stack=_build_undo_stack(config),
         permission_guard=PermissionGuard(config.safety.protected_paths),
         max_batch_size=config.safety.max_batch_size,
         enable_undo=config.safety.enable_undo,
@@ -190,9 +195,45 @@ def configure() -> None:
 
 
 @app.command()
-def history() -> None:
+@click.option("--limit", default=10, show_default=True, type=int, help="Maximum entries to show.")
+@click.option("--json", "json_output", is_flag=True, help="Return machine-readable JSON.")
+def history(limit: int, json_output: bool) -> None:
     """View operation history."""
-    console.print("[yellow]History viewer coming soon...[/yellow]")
+    config = Config.load()
+    undo_stack = _build_undo_stack(config)
+    operations = undo_stack.list_recent(
+        limit=max(limit, 0),
+        retention_days=config.undo.retention_days,
+    )
+    details = {
+        "count": len(operations),
+        "operations": [
+            {
+                "operation_id": operation.operation_id,
+                "action": operation.action,
+                "created_at": operation.created_at,
+                "item_count": len(operation.items),
+                "items": operation.items,
+            }
+            for operation in operations
+        ],
+    }
+
+    if json_output:
+        _emit_result(True, "History loaded.", details, json_output=True)
+        return
+
+    if not operations:
+        console.print("[yellow]No Stoat history found.[/yellow]")
+        return
+
+    console.print("[bold green]Recent Stoat history:[/bold green]")
+    console.print(
+        "\n".join(
+            f"- {operation.created_at} | {operation.action} | {len(operation.items)} item(s)"
+            for operation in operations
+        )
+    )
 
 
 @app.command()

@@ -7,6 +7,7 @@ import json
 import re
 
 from stoat.core.intent_schema import (
+    FileFilters,
     Intent,
     IntentAction,
     IntentParseError,
@@ -90,11 +91,12 @@ class NLPEngine:
 
         find_match = re.match(r"^(?:find|search|locate)\s+(.+)$", text, flags=re.IGNORECASE)
         if find_match:
-            target = self._normalize_file_query(find_match.group(1))
+            target, filters = self._parse_find_query(find_match.group(1))
             return Intent(
                 action=IntentAction.FIND,
                 target_type=TargetType.FILE,
                 target=target,
+                filters=filters,
                 confidence=0.95,
                 raw_text=text,
             )
@@ -207,3 +209,38 @@ class NLPEngine:
         if lowered.startswith("my "):
             return query[3:].strip()
         return query
+
+    def _parse_find_query(self, value: str) -> tuple[str, FileFilters | None]:
+        query = self._clean_target_phrase(value)
+        lowered = query.lower()
+        filters = FileFilters()
+
+        containing_match = re.match(r"^(?:files?\s+)?containing\s+(.+)$", lowered)
+        if containing_match:
+            filters.name_contains = self._clean_target_phrase(containing_match.group(1))
+            return filters.name_contains or "*", filters
+
+        extension_match = re.search(r"\b([a-z0-9]+)\s+files?$", lowered)
+        if extension_match and extension_match.group(1) not in {"my", "all"}:
+            filters.extension = f".{extension_match.group(1)}"
+            prefix = lowered[: extension_match.start()].strip()
+            if prefix in {"", "all"}:
+                return "*", filters
+            if prefix.startswith("containing "):
+                filters.name_contains = self._clean_target_phrase(
+                    prefix.removeprefix("containing ")
+                )
+                return filters.name_contains or "*", filters
+            query = self._clean_target_phrase(prefix)
+
+        if re.fullmatch(r"\.[a-z0-9]+", lowered):
+            filters.extension = lowered
+            return "*", filters
+
+        normalized = self._normalize_file_query(query)
+        if filters.extension is None and normalized.startswith("*.") and len(normalized) > 2:
+            filters.extension = normalized[1:]
+            return "*", filters
+        if filters.name_contains or filters.extension:
+            return normalized, filters
+        return normalized, None

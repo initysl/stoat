@@ -34,7 +34,7 @@ class FileSystem:
         if relative_candidate.exists():
             return [relative_candidate.resolve()]
 
-        return [path.resolve() for path in self._search_engine.search(base_dir, target)]
+        return [match.path.resolve() for match in self._search_engine.search(base_dir, target)]
 
     def ensure_directory(self, destination: Path) -> Path:
         destination.mkdir(parents=True, exist_ok=True)

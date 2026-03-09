@@ -25,21 +25,26 @@ class SearchHandler(BaseHandler):
 
     def handle(self, intent: Intent, context: ExecutionContext) -> HandlerResult:
         base_dir = self._file_system.resolve_path(intent.source, cwd=context.cwd, home=context.home)
-        matches = self._search_engine.search(base_dir, intent.target)
+        matches = self._search_engine.search(base_dir, intent.target, intent.filters)
         if not matches:
             return HandlerResult(
                 success=False,
                 message=f"No files matched '{intent.target}'.",
-                details={"action": intent.action.value, "matches": []},
+                details={
+                    "action": intent.action.value,
+                    "matches": [],
+                    "filters": intent.filters.model_dump() if intent.filters else None,
+                },
             )
 
-        display = "\n".join(f"- {path}" for path in matches)
+        display = "\n".join(f"- {match.path} (score={match.score})" for match in matches)
         return HandlerResult(
             success=True,
             message=f"Found {len(matches)} match(es):\n{display}",
             details={
                 "action": intent.action.value,
                 "count": len(matches),
-                "matches": [str(path) for path in matches],
+                "matches": [{"path": str(match.path), "score": match.score} for match in matches],
+                "filters": intent.filters.model_dump() if intent.filters else None,
             },
         )

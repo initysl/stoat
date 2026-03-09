@@ -41,6 +41,27 @@ def test_parse_unknown_command_without_llm() -> None:
     assert intent.action == IntentAction.UNKNOWN
 
 
+def test_parse_find_pdf_files_with_extension_filter() -> None:
+    engine = NLPEngine(enable_llm_fallback=False)
+
+    intent = engine.parse("find pdf files")
+
+    assert intent.action == IntentAction.FIND
+    assert intent.target == "*"
+    assert intent.filters is not None
+    assert intent.filters.extension == ".pdf"
+
+
+def test_parse_find_files_containing_phrase() -> None:
+    engine = NLPEngine(enable_llm_fallback=False)
+
+    intent = engine.parse("find files containing report")
+
+    assert intent.action == IntentAction.FIND
+    assert intent.filters is not None
+    assert intent.filters.name_contains == "report"
+
+
 def test_llm_fallback_used_for_unknown_command(monkeypatch) -> None:
     engine = NLPEngine(enable_llm_fallback=True)
 

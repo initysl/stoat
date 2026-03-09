@@ -84,6 +84,7 @@ def test_cli_confirmation_prompt_can_cancel(monkeypatch, sample_files) -> None:
 
     assert result.exit_code == 1
     assert "action cancelled" in result.stdout.lower()
+    assert "confirm delete" in result.stdout.lower()
     assert (sample_files / "test.txt").exists() is True
 
 
@@ -116,6 +117,22 @@ def test_cli_json_output_is_stable(monkeypatch, sample_files) -> None:
     assert result.exit_code == 0
     assert payload["success"] is True
     assert payload["details"]["action"] == "find"
+
+
+def test_cli_dry_run_does_not_modify_files(monkeypatch, sample_files) -> None:
+    monkeypatch.chdir(sample_files)
+    monkeypatch.setattr(
+        "stoat.cli.Config.load",
+        classmethod(lambda cls, config_path=None: _test_config(sample_files)),
+    )
+
+    result = runner.invoke(app, ["run", "--dry-run", "--json", "delete test.txt"])
+
+    payload = json.loads(result.stdout)
+
+    assert result.exit_code == 0
+    assert payload["details"]["dry_run"] is True
+    assert (sample_files / "test.txt").exists() is True
 
 
 def test_cli_undo_without_history_fails(monkeypatch, sample_files) -> None:

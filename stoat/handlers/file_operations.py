@@ -59,6 +59,8 @@ class FileOperationsHandler(BaseHandler):
             return batch_error
 
         if intent.action == IntentAction.DELETE:
+            if context.dry_run:
+                return self._build_dry_run_result(intent, matches)
             return self._delete(matches, intent)
 
         destination = self._file_system.resolve_path(
@@ -72,6 +74,12 @@ class FileOperationsHandler(BaseHandler):
                 message=f"Refusing to write to protected path '{destination}'.",
                 details={"action": intent.action.value, "path": str(destination)},
             )
+        transfer_plan = self._file_system.plan_transfer(matches, destination)
+        collision_error = self._validate_transfer_plan(intent, transfer_plan)
+        if collision_error is not None:
+            return collision_error
+        if context.dry_run:
+            return self._build_dry_run_result(intent, matches, destination=destination)
         if intent.action == IntentAction.MOVE:
             items = self._file_system.move(matches, destination)
             if self._enable_undo:
@@ -125,6 +133,65 @@ class FileOperationsHandler(BaseHandler):
             )
 
         return None
+
+    def _validate_transfer_plan(
+        self,
+        intent: Intent,
+        transfer_plan: list[dict[str, str | bool]],
+    ) -> HandlerResult | None:
+        collisions = [
+            item["destination_path"] for item in transfer_plan if bool(item["will_overwrite"])
+        ]
+        if collisions:
+            preview = ", ".join(str(path) for path in collisions[:3])
+            suffix = "" if len(collisions) <= 3 else f" and {len(collisions) - 3} more"
+            return HandlerResult(
+                success=False,
+                message=(
+                    f"Refusing to {intent.action.value} because destination files already exist: "
+                    f"{preview}{suffix}."
+                ),
+                details={
+                    "action": intent.action.value,
+                    "collisions": [str(path) for path in collisions],
+                },
+            )
+        return None
+
+    def _build_dry_run_result(
+        self,
+        intent: Intent,
+        matches: list[Path],
+        *,
+        destination: Path | None = None,
+    ) -> HandlerResult:
+        if intent.action == IntentAction.DELETE:
+            items = [{"original_path": str(path)} for path in matches]
+            return HandlerResult(
+                success=True,
+                message=f"Dry run: would delete {len(items)} item(s).",
+                details={
+                    "action": intent.action.value,
+                    "dry_run": True,
+                    "count": len(items),
+                    "items": items,
+                },
+            )
+
+        assert destination is not None
+        items = self._file_system.plan_transfer(matches, destination)
+        return HandlerResult(
+            success=True,
+            message=(
+                f"Dry run: would {intent.action.value} {len(items)} item(s) " f"to '{destination}'."
+            ),
+            details={
+                "action": intent.action.value,
+                "dry_run": True,
+                "count": len(items),
+                "items": items,
+            },
+        )
 
     def _delete(self, matches: list[Path], intent: Intent) -> HandlerResult:
         operation_id, items = self._trash_manager.stage(matches)

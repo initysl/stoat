@@ -90,6 +90,34 @@ def test_copy_file_to_destination(temp_dir) -> None:
     assert file_path.exists() is True
 
 
+def test_dry_run_move_previews_without_mutation(temp_dir) -> None:
+    source = temp_dir / "source"
+    destination = temp_dir / "dest"
+    source.mkdir()
+    destination.mkdir()
+    file_path = source / "report.txt"
+    file_path.write_text("hello")
+
+    handler = _build_handler(temp_dir)
+    context = ExecutionContext(cwd=temp_dir, home=temp_dir, dry_run=True)
+    intent = Intent(
+        action=IntentAction.MOVE,
+        target_type=TargetType.FILE,
+        target="report.txt",
+        source=str(source),
+        destination=str(destination),
+        confidence=0.95,
+        raw_text="move report.txt from source to dest",
+    )
+
+    result = handler.handle(intent, context)
+
+    assert result.success is True
+    assert result.details["dry_run"] is True
+    assert file_path.exists() is True
+    assert (destination / "report.txt").exists() is False
+
+
 def test_delete_and_undo_restore_file(temp_dir) -> None:
     source = temp_dir / "source"
     source.mkdir()
@@ -124,6 +152,32 @@ def test_delete_and_undo_restore_file(temp_dir) -> None:
     assert delete_result.success is True
     assert undo_result.success is True
     assert file_path.exists() is True
+
+
+def test_copy_collision_is_blocked(temp_dir) -> None:
+    source = temp_dir / "source"
+    destination = temp_dir / "dest"
+    source.mkdir()
+    destination.mkdir()
+    (source / "report.txt").write_text("new")
+    (destination / "report.txt").write_text("existing")
+
+    handler = _build_handler(temp_dir)
+    context = ExecutionContext(cwd=temp_dir, home=temp_dir)
+    intent = Intent(
+        action=IntentAction.COPY,
+        target_type=TargetType.FILE,
+        target="report.txt",
+        source=str(source),
+        destination=str(destination),
+        confidence=0.95,
+        raw_text="copy report.txt from source to dest",
+    )
+
+    result = handler.handle(intent, context)
+
+    assert result.success is False
+    assert "already exist" in result.message.lower()
 
 
 def test_protected_path_is_blocked(temp_dir) -> None:

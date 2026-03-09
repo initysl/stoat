@@ -40,6 +40,18 @@ class FileSystem:
         destination.mkdir(parents=True, exist_ok=True)
         return destination
 
+    def plan_transfer(
+        self, paths: list[Path], destination_dir: Path
+    ) -> list[dict[str, str | bool]]:
+        return [
+            {
+                "original_path": str(path),
+                "destination_path": str(destination_dir / path.name),
+                "will_overwrite": (destination_dir / path.name).exists(),
+            }
+            for path in paths
+        ]
+
     def move(self, paths: list[Path], destination_dir: Path) -> list[dict[str, str]]:
         destination_dir = self.ensure_directory(destination_dir)
         items: list[dict[str, str]] = []

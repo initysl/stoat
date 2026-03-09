@@ -74,6 +74,25 @@ def _emit_result(success: bool, message: str, details: dict, json_output: bool) 
     console.print(f"[{style}]{message}[/{style}]")
 
 
+def _summarize_confirmation(intent: Intent, context: ExecutionContext) -> str:
+    if intent.action in {IntentAction.MOVE, IntentAction.COPY}:
+        source = intent.source or str(context.cwd)
+        destination = intent.destination or str(context.cwd)
+        return (
+            f"Confirm {intent.action.value} of '{intent.target}' "
+            f"from '{source}' to '{destination}'?"
+        )
+
+    if intent.action == IntentAction.DELETE:
+        source = intent.source or str(context.cwd)
+        return f"Confirm delete of '{intent.target}' from '{source}'?"
+
+    if intent.action == IntentAction.UNDO:
+        return "Confirm undo of the last Stoat-managed operation?"
+
+    return f"Confirm '{intent.action.value}' for '{intent.target}'?"
+
+
 def _execute_intent(
     intent: Intent,
     *,
@@ -91,9 +110,9 @@ def _execute_intent(
         )
         return 1
 
-    if safety.requires_confirmation(intent) and not context.skip_confirmations:
+    if safety.requires_confirmation(intent) and not (context.skip_confirmations or context.dry_run):
         confirmer = ConfirmationPrompt()
-        confirmed = confirmer.ask(f"Confirm '{intent.action.value}' for '{intent.target}'?")
+        confirmed = confirmer.ask(_summarize_confirmation(intent, context))
         if not confirmed:
             _emit_result(False, "Action cancelled.", {"action": intent.action.value}, json_output)
             return 1
@@ -112,12 +131,14 @@ def app() -> None:
 @app.command()
 @click.argument("message")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmations.")
+@click.option("--dry-run", is_flag=True, help="Preview file changes without modifying anything.")
 @click.option("--json", "json_output", is_flag=True, help="Return machine-readable JSON.")
-def run(message: str, yes: bool, json_output: bool) -> None:
+def run(message: str, yes: bool, dry_run: bool, json_output: bool) -> None:
     """Execute a natural-language command."""
     config = Config.load()
     context = ExecutionContext.from_runtime(
-        skip_confirmations=_resolve_skip_confirmations(yes=bool(yes))
+        skip_confirmations=_resolve_skip_confirmations(yes=bool(yes)),
+        dry_run=dry_run,
     )
     parser = _build_parser(config)
     router = _build_router(config)

@@ -20,12 +20,17 @@ ollama pull llama3.2:3b-instruct-q4_K_M
 
 ### 3. Install Stoat
 
-**From PyPI:**
+**For normal use:**
 ```bash
 pip install stoat
 ```
 
-**From source:**
+Then run:
+```bash
+stoat version
+```
+
+**For development from source:**
 ```bash
 git clone https://github.com/yourusername/stoat.git
 cd stoat
@@ -34,7 +39,7 @@ uv sync --extra dev
 
 ### 4. Verify Installation
 ```bash
-stoat version
+uv run stoat version
 ```
 
 You're ready to go! 🦡

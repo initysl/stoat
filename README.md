@@ -25,13 +25,8 @@ Stoat is a privacy-first, offline AI assistant for Linux that lets you control y
 curl -fsSL https://ollama.ai/install.sh | sh
 ollama pull llama3.2:3b-instruct-q4_K_M
 
-# Install Stoat
+# Install Stoat for normal use
 pip install stoat
-
-# Or install from source
-git clone https://github.com/yourusername/stoat.git
-cd stoat
-uv sync --extra dev
 ```
 
 ### Usage
@@ -52,6 +47,16 @@ stoat run "close all chrome windows"
 stoat run "what's using all my RAM?"
 ```
 
+### From Source
+```bash
+git clone https://github.com/yourusername/stoat.git
+cd stoat
+uv sync --extra dev
+
+# Run from the project environment while developing
+uv run stoat run "find report"
+```
+
 ## Documentation
 
 - [Installation Guide](docs/installation.md)
@@ -67,7 +72,7 @@ stoat run "what's using all my RAM?"
 uv sync --extra dev
 
 # Run tests
-uv run pytest
+uv run pytest -q
 
 # Format code
 uv run black stoat tests config setup.py

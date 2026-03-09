@@ -34,10 +34,25 @@ class SearchEngine:
         else:
             matches = self._search_by_score(base_dir, query, filters)
 
-        matches.sort(
-            key=lambda match: (-match.score, len(match.path.parts), match.path.name.lower())
-        )
-        return matches[: self._max_results]
+        if filters and filters.sort_by == "modified":
+            matches.sort(
+                key=lambda match: (
+                    (
+                        -int(match.path.stat().st_mtime)
+                        if filters.descending
+                        else int(match.path.stat().st_mtime)
+                    ),
+                    -match.score,
+                    len(match.path.parts),
+                )
+            )
+        else:
+            matches.sort(
+                key=lambda match: (-match.score, len(match.path.parts), match.path.name.lower())
+            )
+
+        limit = filters.limit if filters and filters.limit is not None else self._max_results
+        return matches[:limit]
 
     def _search_by_glob(
         self,
@@ -79,7 +94,12 @@ class SearchEngine:
             return False
         if filters is None:
             return True
-        if filters.extension and path.suffix.lower() != filters.extension.lower():
+        allowed_extensions = set()
+        if filters.extension:
+            allowed_extensions.add(filters.extension.lower())
+        if filters.extensions:
+            allowed_extensions.update(extension.lower() for extension in filters.extensions)
+        if allowed_extensions and path.suffix.lower() not in allowed_extensions:
             return False
         if filters.name_contains and filters.name_contains.lower() not in path.name.lower():
             return False

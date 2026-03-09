@@ -89,13 +89,14 @@ class NLPEngine:
                 raw_text=text,
             )
 
-        find_match = re.match(r"^(?:find|search|locate)\s+(.+)$", text, flags=re.IGNORECASE)
-        if find_match:
-            target, filters = self._parse_find_query(find_match.group(1))
+        find_phrase = self._extract_find_phrase(text)
+        if find_phrase is not None:
+            target, filters, source = self._parse_find_query(find_phrase)
             return Intent(
                 action=IntentAction.FIND,
                 target_type=TargetType.FILE,
                 target=target,
+                source=source,
                 filters=filters,
                 confidence=0.95,
                 raw_text=text,
@@ -210,37 +211,119 @@ class NLPEngine:
             return query[3:].strip()
         return query
 
-    def _parse_find_query(self, value: str) -> tuple[str, FileFilters | None]:
+    def _extract_find_phrase(self, text: str) -> str | None:
+        direct_match = re.match(r"^(?:find|search|locate)\s+(.+)$", text, flags=re.IGNORECASE)
+        if direct_match:
+            return direct_match.group(1)
+
+        conversational_patterns = (
+            r"^(?:i(?:'m| am)?\s+)?(?:looking|searching|trying)\s+for\s+(.+)$",
+            r"^(?:i(?:'m| am)?\s+)?finding\s+(.+)$",
+            r"^i\s+saved\s+(?:a\s+)?file\s+as\s+(.+?),\s*find\s+it$",
+            r"^i\s+saved\s+(?:a\s+)?file\s+as\s+(.+?)\s+find\s+it$",
+        )
+        for pattern in conversational_patterns:
+            match = re.match(pattern, text, flags=re.IGNORECASE)
+            if match:
+                return match.group(1)
+        return None
+
+    def _parse_find_query(self, value: str) -> tuple[str, FileFilters | None, str | None]:
         query = self._clean_target_phrase(value)
         lowered = query.lower()
         filters = FileFilters()
+        source = self._extract_source_alias(lowered)
+
+        for phrase in ("i last modified", "last modified", "recently modified"):
+            if phrase in lowered:
+                lowered = lowered.replace(phrase, "").strip()
+                query = self._clean_target_phrase(lowered)
+                filters.sort_by = "modified"
+                filters.descending = True
+
+        if "latest" in lowered or "newest" in lowered:
+            lowered = re.sub(r"\b(latest|newest)\b", "", lowered).strip()
+            query = self._clean_target_phrase(lowered)
+            filters.sort_by = "modified"
+            filters.descending = True
+            filters.limit = 1
+
+        query, source = self._strip_source_terms(query, source)
+        lowered = query.lower()
+
+        document_aliases = {
+            "doc": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
+            "docs": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
+            "document": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
+            "documents": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
+            "download": None,
+            "downloads": None,
+        }
+
+        if lowered in document_aliases and document_aliases[lowered]:
+            filters.extensions = document_aliases[lowered]
+            return "*", filters, source
 
         containing_match = re.match(r"^(?:files?\s+)?containing\s+(.+)$", lowered)
         if containing_match:
             filters.name_contains = self._clean_target_phrase(containing_match.group(1))
-            return filters.name_contains or "*", filters
+            return filters.name_contains or "*", filters, source
 
         extension_match = re.search(r"\b([a-z0-9]+)\s+files?$", lowered)
         if extension_match and extension_match.group(1) not in {"my", "all"}:
             filters.extension = f".{extension_match.group(1)}"
             prefix = lowered[: extension_match.start()].strip()
             if prefix in {"", "all"}:
-                return "*", filters
+                return "*", filters, source
             if prefix.startswith("containing "):
                 filters.name_contains = self._clean_target_phrase(
                     prefix.removeprefix("containing ")
                 )
-                return filters.name_contains or "*", filters
+                return filters.name_contains or "*", filters, source
             query = self._clean_target_phrase(prefix)
 
         if re.fullmatch(r"\.[a-z0-9]+", lowered):
             filters.extension = lowered
-            return "*", filters
+            return "*", filters, source
 
         normalized = self._normalize_file_query(query)
         if filters.extension is None and normalized.startswith("*.") and len(normalized) > 2:
             filters.extension = normalized[1:]
-            return "*", filters
-        if filters.name_contains or filters.extension:
-            return normalized, filters
-        return normalized, None
+            return "*", filters, source
+        if normalized != "*" and re.fullmatch(r"[A-Za-z0-9._-]+", normalized):
+            filters.name_contains = normalized
+        if filters.name_contains or filters.extension or filters.extensions or filters.sort_by:
+            return normalized, filters, source
+        return normalized, None, source
+
+    def _extract_source_alias(self, lowered: str) -> str | None:
+        aliases = {
+            "download": "~/Downloads",
+            "downloads": "~/Downloads",
+            "documents": "~/Documents",
+            "docs": "~/Documents",
+            "desktop": "~/Desktop",
+        }
+        for word, path in aliases.items():
+            if re.search(rf"\b{word}\b", lowered):
+                return path
+        return None
+
+    def _strip_source_terms(self, query: str, source: str | None) -> tuple[str, str | None]:
+        cleaned = query
+        if source == "~/Downloads":
+            cleaned = re.sub(r"\bmy\s+latest\s+download\b", "", cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(r"\bdownloads?\b", "", cleaned, flags=re.IGNORECASE)
+        if source == "~/Documents":
+            cleaned = re.sub(r"\bmy\s+docs\b", "", cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(r"\bdocs?\b", "", cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(r"\bdocuments?\b", "", cleaned, flags=re.IGNORECASE)
+        if source == "~/Desktop":
+            cleaned = re.sub(r"\bdesktop\b", "", cleaned, flags=re.IGNORECASE)
+
+        cleaned = re.sub(r"\bmy\b", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"^(?:a|an|the)\b", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip(" ,")
+        if source == "~/Documents" and cleaned in {"", "*"}:
+            return "docs", source
+        return cleaned or "*", source

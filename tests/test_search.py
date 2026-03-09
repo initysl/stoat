@@ -1,5 +1,8 @@
 """Tests for search behavior."""
 
+from pathlib import Path
+import time
+
 from stoat.core.context import ExecutionContext
 from stoat.core.intent_schema import FileFilters, Intent, IntentAction, TargetType
 from stoat.handlers.search import SearchHandler
@@ -74,3 +77,48 @@ def test_search_engine_hides_hidden_files_by_default(temp_dir) -> None:
 
     assert all(match.path.name != ".secret.txt" for match in hidden_off)
     assert any(match.path.name == ".secret.txt" for match in hidden_on)
+
+
+def test_search_engine_respects_modified_sort_and_limit(temp_dir: Path) -> None:
+    older = temp_dir / "older.txt"
+    newer = temp_dir / "newer.txt"
+    older.write_text("old")
+    time.sleep(0.01)
+    newer.write_text("new")
+
+    engine = SearchEngine(index_hidden_files=False, max_results=10)
+    matches = engine.search(
+        temp_dir,
+        "*",
+        FileFilters(sort_by="modified", descending=True, limit=1),
+    )
+
+    assert len(matches) == 1
+    assert matches[0].path.name == "newer.txt"
+
+
+def test_search_handler_uses_source_directory(temp_dir: Path) -> None:
+    downloads = temp_dir / "Downloads"
+    downloads.mkdir()
+    (downloads / "recent.txt").write_text("download")
+    (temp_dir / "recent.txt").write_text("root")
+    handler = SearchHandler(
+        search_engine=SearchEngine(index_hidden_files=False, max_results=10),
+        file_system=FileSystem(
+            search_engine=SearchEngine(index_hidden_files=False, max_results=10)
+        ),
+    )
+    context = ExecutionContext(cwd=temp_dir, home=temp_dir)
+    intent = Intent(
+        action=IntentAction.FIND,
+        target_type=TargetType.FILE,
+        target="recent",
+        source=str(downloads),
+        confidence=0.9,
+        raw_text="find my latest download",
+    )
+
+    result = handler.handle(intent, context)
+
+    assert result.success is True
+    assert all(str(downloads) in match["path"] for match in result.details["matches"])

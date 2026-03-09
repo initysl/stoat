@@ -33,7 +33,11 @@ class FileFilters(BaseModel):
     """Optional file filters retained for parser compatibility."""
 
     extension: str | None = None
+    extensions: list[str] | None = None
     name_contains: str | None = None
+    sort_by: str | None = None
+    descending: bool = False
+    limit: int | None = None
 
 
 class Intent(BaseModel):

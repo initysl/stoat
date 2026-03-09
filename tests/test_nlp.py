@@ -62,6 +62,41 @@ def test_parse_find_files_containing_phrase() -> None:
     assert intent.filters.name_contains == "report"
 
 
+def test_parse_latest_download_request() -> None:
+    engine = NLPEngine(enable_llm_fallback=False)
+
+    intent = engine.parse("find my latest download")
+
+    assert intent.action == IntentAction.FIND
+    assert intent.source == "~/Downloads"
+    assert intent.filters is not None
+    assert intent.filters.sort_by == "modified"
+    assert intent.filters.descending is True
+    assert intent.filters.limit == 1
+
+
+def test_parse_conversational_documents_request() -> None:
+    engine = NLPEngine(enable_llm_fallback=False)
+
+    intent = engine.parse("i'm finding a docs i last modified")
+
+    assert intent.action == IntentAction.FIND
+    assert intent.source == "~/Documents"
+    assert intent.filters is not None
+    assert intent.filters.sort_by == "modified"
+    assert ".pdf" in (intent.filters.extensions or [])
+
+
+def test_parse_saved_file_reference() -> None:
+    engine = NLPEngine(enable_llm_fallback=False)
+
+    intent = engine.parse("i saved a file as abc, find it")
+
+    assert intent.action == IntentAction.FIND
+    assert intent.filters is not None
+    assert intent.filters.name_contains == "abc"
+
+
 def test_llm_fallback_used_for_unknown_command(monkeypatch) -> None:
     engine = NLPEngine(enable_llm_fallback=True)
 

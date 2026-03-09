@@ -31,7 +31,7 @@ pip install stoat
 # Or install from source
 git clone https://github.com/yourusername/stoat.git
 cd stoat
-poetry install
+uv sync --extra dev
 ```
 
 ### Usage
@@ -64,14 +64,14 @@ stoat run "what's using all my RAM?"
 ## Development
 ```bash
 # Setup development environment
-poetry install
+uv sync --extra dev
 
 # Run tests
-poetry run pytest
+uv run pytest
 
 # Format code
-poetry run black .
-poetry run ruff check .
+uv run black stoat tests config setup.py
+uv run ruff check
 ```
 
 ## License

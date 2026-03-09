@@ -1,4 +1,5 @@
 """Configuration management"""
+
 from pathlib import Path
 from typing import Optional
 import toml
@@ -14,7 +15,7 @@ class LLMConfig(BaseModel):
 
 
 class SafetyConfig(BaseModel):
-    require_confirmation: list[str] = ["delete", "uninstall", "move_multiple"]
+    require_confirmation: list[str] = ["delete", "move", "undo"]
     protected_paths: list[str] = ["/etc", "/usr", "/bin", "/boot", "/sys", "/proc"]
     max_batch_size: int = 100
     enable_undo: bool = True
@@ -53,7 +54,7 @@ class Config(BaseModel):
         """Load configuration from file"""
         if config_path is None:
             config_path = Path.home() / ".config" / "stoat" / "config.toml"
-        
+
         if config_path.exists():
             data = toml.load(config_path)
             return cls(**data)
@@ -63,7 +64,7 @@ class Config(BaseModel):
         """Save configuration to file"""
         if config_path is None:
             config_path = Path.home() / ".config" / "stoat" / "config.toml"
-        
+
         config_path.parent.mkdir(parents=True, exist_ok=True)
         with open(config_path, "w") as f:
             toml.dump(self.model_dump(), f)

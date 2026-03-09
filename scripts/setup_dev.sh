@@ -14,23 +14,23 @@ if [ "$(printf '%s\n' "$required_version" "$python_version" | sort -V | head -n1
     exit 1
 fi
 
-# Install Poetry if not installed
-if ! command -v poetry &> /dev/null; then
-    echo "Installing Poetry..."
-    curl -sSL https://install.python-poetry.org | python3 -
+# Install uv if not installed
+if ! command -v uv &> /dev/null; then
+    echo "Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
     export PATH="$HOME/.local/bin:$PATH"
 fi
 
 # Install dependencies
 echo "Installing dependencies..."
-poetry install
+uv sync --extra dev
 
 # Setup pre-commit hooks (optional)
-poetry run pre-commit install 2>/dev/null || true
+uv run pre-commit install 2>/dev/null || true
 
 echo "✓ Development environment ready!"
 echo ""
 echo "Quick commands:"
-echo "  poetry run stoat --help"
-echo "  poetry run pytest"
-echo "  poetry run black ."
+echo "  uv run stoat --help"
+echo "  uv run pytest"
+echo "  uv run black stoat tests config setup.py"

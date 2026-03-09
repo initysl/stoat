@@ -9,13 +9,7 @@ class SafetyValidator:
     """Decides whether a command requires user confirmation."""
 
     def __init__(self, required_confirmations: set[str] | None = None) -> None:
-        self._required_confirmations = required_confirmations or {
-            "delete",
-            "uninstall",
-            "move_multiple",
-        }
+        self._required_confirmations = required_confirmations or {"delete", "move", "undo"}
 
     def requires_confirmation(self, intent: Intent) -> bool:
-        if intent.requires_confirmation:
-            return True
-        return intent.action.value in self._required_confirmations
+        return intent.requires_confirmation or intent.action.value in self._required_confirmations

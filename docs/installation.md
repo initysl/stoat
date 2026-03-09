@@ -29,7 +29,7 @@ pip install stoat
 ```bash
 git clone https://github.com/yourusername/stoat.git
 cd stoat
-poetry install
+uv sync --extra dev
 ```
 
 ### 4. Verify Installation

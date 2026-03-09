@@ -1,4 +1,5 @@
 """Pytest configuration and fixtures"""
+
 import pytest
 from pathlib import Path
 import tempfile
@@ -21,12 +22,12 @@ def sample_files(temp_dir):
         "document.pdf": b"PDF content",
         "image.png": b"PNG content",
     }
-    
+
     for filename, content in files.items():
         filepath = temp_dir / filename
         if isinstance(content, str):
             filepath.write_text(content)
         else:
             filepath.write_bytes(content)
-    
+
     return temp_dir

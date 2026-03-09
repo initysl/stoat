@@ -8,7 +8,7 @@ from stoat.safety.validator import SafetyValidator
 def test_requires_confirmation_when_intent_marks_it() -> None:
     validator = SafetyValidator()
     intent = Intent(
-        action=IntentAction.CLOSE_APP,
+        action=IntentAction.CLOSE,
         raw_text="close firefox",
         target="firefox",
         confidence=0.9,
@@ -19,11 +19,12 @@ def test_requires_confirmation_when_intent_marks_it() -> None:
 
 
 def test_requires_confirmation_by_configured_action_name() -> None:
-    validator = SafetyValidator(required_confirmations={"launch_app"})
+    validator = SafetyValidator(required_confirmations={"move"})
     intent = Intent(
-        action=IntentAction.LAUNCH_APP,
-        raw_text="open firefox",
-        target="firefox",
+        action=IntentAction.MOVE,
+        raw_text="move report.txt to Backup",
+        target="report.txt",
+        destination="Backup",
         confidence=0.95,
     )
 

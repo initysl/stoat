@@ -1,7 +1,7 @@
 """Tests for app management handler."""
 
 from stoat.core.context import ExecutionContext
-from stoat.core.intent_schema import Intent, IntentAction
+from stoat.core.intent_schema import Intent, IntentAction, TargetType
 from stoat.handlers.app_management import AppManagementHandler
 from stoat.integrations.desktop_env import DesktopActionResult
 
@@ -18,7 +18,8 @@ def test_launch_app_handler_returns_success() -> None:
     handler = AppManagementHandler(desktop_env=StubDesktopEnvironment())
     context = ExecutionContext.from_runtime(skip_confirmations=True)
     intent = Intent(
-        action=IntentAction.LAUNCH_APP,
+        action=IntentAction.LAUNCH,
+        target_type=TargetType.APPLICATION,
         raw_text="open firefox",
         target="firefox",
         confidence=0.95,
@@ -35,7 +36,8 @@ def test_close_app_handler_returns_success() -> None:
     handler = AppManagementHandler(desktop_env=StubDesktopEnvironment())
     context = ExecutionContext.from_runtime(skip_confirmations=True)
     intent = Intent(
-        action=IntentAction.CLOSE_APP,
+        action=IntentAction.CLOSE,
+        target_type=TargetType.APPLICATION,
         raw_text="close firefox",
         target="firefox",
         confidence=0.9,
@@ -45,4 +47,4 @@ def test_close_app_handler_returns_success() -> None:
     result = handler.handle(intent, context)
 
     assert result.success is True
-    assert result.details["action"] == IntentAction.CLOSE_APP.value
+    assert result.details["action"] == IntentAction.CLOSE.value

@@ -14,4 +14,6 @@ class PermissionGuard:
 
     def is_protected_path(self, candidate: Path) -> bool:
         resolved = candidate.expanduser().resolve()
-        return any(resolved == protected or protected in resolved.parents for protected in self._protected)
+        return any(
+            resolved == protected or protected in resolved.parents for protected in self._protected
+        )

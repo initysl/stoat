@@ -85,7 +85,9 @@ class DesktopEnvironment:
         except OSError as exc:
             return DesktopActionResult(success=False, message=f"Failed to run pkill: {exc}")
         if fuzzy_match.returncode == 0:
-            return DesktopActionResult(success=True, message=f"Stopped processes matching '{cleaned}'.")
+            return DesktopActionResult(
+                success=True, message=f"Stopped processes matching '{cleaned}'."
+            )
         if fuzzy_match.returncode == 1:
             return DesktopActionResult(
                 success=False,

@@ -1,141 +1,209 @@
+"""Rule-first NLP engine with optional Ollama fallback."""
+
+from __future__ import annotations
+
+import importlib
 import json
 import re
-from pathlib import Path
-from typing import Optional
-from llama_cpp import Llama
 
-from stoat.core.intent_schema import Intent, IntentParseError, LowConfidenceError
-from stoat.prompts.system_prompt import build_prompt
+from stoat.core.intent_schema import (
+    Intent,
+    IntentAction,
+    IntentParseError,
+    LowConfidenceError,
+    TargetType,
+)
+from stoat.prompts.system_prompt import build_chat_messages
 
 
 class NLPEngine:
-    """Natural Language Processing engine for intent parsing"""
-    
+    """Natural language parser for Stoat commands."""
+
     def __init__(
         self,
-        model_path: Optional[Path] = None,
+        model: str = "llama3.2:3b-instruct-q4_K_M",
         confidence_threshold: float = 0.7,
         temperature: float = 0.1,
-        max_tokens: int = 512,
-    ):
-        """
-        Initialize the NLP engine
-        Args:
-            model_path: Path to the GGUF model file
-            confidence_threshold: Minimum confidence score to accept
-            temperature: LLM temperature (lower = more deterministic)
-            max_tokens: Maximum tokens to generate
-        """
-        if model_path is None:
-            # Default to models directory in project root
-            project_root = Path(__file__).parent.parent.parent
-            model_path = project_root / "models" / "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
-        
-        if not model_path.exists():
-            raise FileNotFoundError(
-                f"Model file not found at {model_path}\n"
-                f"Download it with:\n"
-                f"wget https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf"
-            )
-        
-        self.model_path = model_path
+        enable_llm_fallback: bool = True,
+    ) -> None:
+        self.model = model
         self.confidence_threshold = confidence_threshold
         self.temperature = temperature
-        self.max_tokens = max_tokens
-        
-        # Initialize the model
-        print(f"Loading model from {model_path}...")
-        self.llm = Llama(
-            model_path=str(model_path),
-            n_ctx=1024,          # Increased from 512
-            n_threads=2,
-            n_batch=128,
-            verbose=False,       # Turn off verbose now
-        )
-        print("Model loaded successfully!")
-    
+        self.enable_llm_fallback = enable_llm_fallback
+
+    def parse(self, user_command: str) -> Intent:
+        """Parse a natural-language command into a canonical intent."""
+        rule_intent = self._parse_with_rules(user_command)
+        if not rule_intent.is_unknown and rule_intent.confidence >= self.confidence_threshold:
+            return rule_intent
+
+        if not self.enable_llm_fallback:
+            return rule_intent
+
+        llm_intent = self._parse_with_llm(user_command)
+        if llm_intent is None:
+            return rule_intent
+        if llm_intent.confidence < self.confidence_threshold:
+            raise LowConfidenceError(llm_intent.confidence, self.confidence_threshold)
+        return llm_intent
+
     def parse_intent(self, user_command: str) -> Intent:
-        """
-        Parse user command into structured intent
-        Args:
-            user_command: Natural language command from user
-        Returns:
-            Intent object with parsed information
-        Raises:
-            IntentParseError: If parsing fails
-            LowConfidenceError: If confidence is below threshold
-        """
-        # Build the prompt
-        prompt = build_prompt(user_command)
-        
-        # Get response from LLM
-        response = self.llm(
-            prompt,
-            max_tokens=256,      # Reduced from 512
-            temperature=0.1,
-            stop=["User:", "\n\n", "}"],  # Add } to stop after JSON
-            echo=False,
+        """Backwards-compatible alias for existing callers."""
+        return self.parse(user_command)
+
+    def _parse_with_rules(self, user_command: str) -> Intent:
+        text = re.sub(r"\s+", " ", user_command.strip())
+        lowered = text.lower()
+
+        if lowered == "undo":
+            return Intent(
+                action=IntentAction.UNDO,
+                target_type=TargetType.FILE,
+                target="last_operation",
+                requires_confirmation=True,
+                confidence=1.0,
+                raw_text=text,
+            )
+
+        launch_match = re.match(r"^(?:open|launch|start)\s+(.+)$", text, flags=re.IGNORECASE)
+        if launch_match:
+            target = self._clean_target_phrase(launch_match.group(1))
+            return Intent(
+                action=IntentAction.LAUNCH,
+                target_type=TargetType.APPLICATION,
+                target=target,
+                confidence=0.98,
+                raw_text=text,
+            )
+
+        close_match = re.match(r"^(?:close|quit|stop)\s+(.+)$", text, flags=re.IGNORECASE)
+        if close_match:
+            target = self._clean_target_phrase(close_match.group(1))
+            return Intent(
+                action=IntentAction.CLOSE,
+                target_type=TargetType.APPLICATION,
+                target=target,
+                requires_confirmation=True,
+                confidence=0.97,
+                raw_text=text,
+            )
+
+        find_match = re.match(r"^(?:find|search|locate)\s+(.+)$", text, flags=re.IGNORECASE)
+        if find_match:
+            target = self._normalize_file_query(find_match.group(1))
+            return Intent(
+                action=IntentAction.FIND,
+                target_type=TargetType.FILE,
+                target=target,
+                confidence=0.95,
+                raw_text=text,
+            )
+
+        for action, verbs in (
+            (IntentAction.MOVE, "move"),
+            (IntentAction.COPY, "copy"),
+        ):
+            pattern = rf"^{verbs}\s+(.+?)(?:\s+from\s+(.+?))?\s+to\s+(.+)$"
+            match = re.match(pattern, text, flags=re.IGNORECASE)
+            if match:
+                target = self._normalize_file_query(match.group(1))
+                source = self._clean_target_phrase(match.group(2)) if match.group(2) else None
+                destination = self._clean_target_phrase(match.group(3))
+                return Intent(
+                    action=action,
+                    target_type=TargetType.FILE,
+                    target=target,
+                    source=source,
+                    destination=destination,
+                    requires_confirmation=action == IntentAction.MOVE,
+                    confidence=0.94,
+                    raw_text=text,
+                )
+
+        delete_match = re.match(
+            r"^(?:delete|remove|trash)\s+(.+?)(?:\s+from\s+(.+))?$",
+            text,
+            flags=re.IGNORECASE,
         )
-        
-        # Extract the generated text
-        raw_output = response["choices"][0]["text"].strip() # type: ignore
-        
-        # Parse JSON from response
+        if delete_match:
+            target = self._normalize_file_query(delete_match.group(1))
+            source = (
+                self._clean_target_phrase(delete_match.group(2)) if delete_match.group(2) else None
+            )
+            return Intent(
+                action=IntentAction.DELETE,
+                target_type=TargetType.FILE,
+                target=target,
+                source=source,
+                requires_confirmation=True,
+                confidence=0.93,
+                raw_text=text,
+            )
+
+        return Intent(
+            action=IntentAction.UNKNOWN,
+            target_type=TargetType.UNKNOWN,
+            target="",
+            confidence=0.0,
+            raw_text=text,
+        )
+
+    def _parse_with_llm(self, user_command: str) -> Intent | None:
         try:
-            intent_data = self._extract_json(raw_output)
-            intent = Intent(**intent_data)
-        except (json.JSONDecodeError, ValueError) as e:
-            raise IntentParseError(f"Failed to parse intent: {e}\nRaw output: {raw_output}")
-        
-        # Check confidence threshold
-        if intent.confidence < self.confidence_threshold:
-            raise LowConfidenceError(intent.confidence, self.confidence_threshold)
-        
-        return intent
-    
-    def _extract_json(self, text: str) -> dict:
-        """
-        Extract JSON from LLM response, handling common issues
-        Args:
-            text: Raw text from LLM
-        Returns:
-            Parsed JSON dictionary
-        """
-        # Try direct JSON parse first
+            ollama = importlib.import_module("ollama")
+        except ImportError:
+            return None
+
         try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            pass
-        
-        # Try to extract JSON from markdown code blocks
-        json_match = re.search(r'```json\s*(\{.*?\})\s*```', text, re.DOTALL)
-        if json_match:
-            return json.loads(json_match.group(1))
-        
-        # Try to find JSON object in text
-        json_match = re.search(r'\{.*\}', text, re.DOTALL)
-        if json_match:
-            return json.loads(json_match.group(0))
-        
-        raise ValueError(f"No valid JSON found in response: {text}")
-    
+            messages = build_chat_messages(user_command)
+            response = ollama.chat(  # type: ignore[attr-defined]
+                model=self.model,
+                messages=messages,
+                options={"temperature": self.temperature, "num_predict": 256},
+                format="json",
+            )
+            raw_output = response.message.content.strip()
+            payload = json.loads(raw_output)
+        except Exception:
+            return None
+
+        payload["raw_text"] = user_command
+        payload.setdefault("requires_confirmation", payload.get("action") in {"delete", "undo"})
+
+        try:
+            return Intent(**payload)
+        except Exception as exc:
+            raise IntentParseError(f"Failed to normalize LLM intent: {exc}") from exc
+
     def test_connection(self) -> bool:
-        """Test if the model is working"""
-        try:
-            test_intent = self.parse_intent("open firefox")
-            return test_intent.action == "launch" and "firefox" in test_intent.target.lower()
-        except Exception as e:
-            print(f"Test failed: {e}")
-            return False
+        """Test whether the optional LLM fallback can parse a simple command."""
+        intent = self.parse("open firefox")
+        return intent.action == IntentAction.LAUNCH
 
+    def _clean_target_phrase(self, value: str | None) -> str:
+        if value is None:
+            return ""
+        cleaned = value.strip().strip("\"'")
+        return re.sub(r"\s+", " ", cleaned)
 
-# Singleton instance
-_engine: Optional[NLPEngine] = None
+    def _normalize_file_query(self, value: str) -> str:
+        query = self._clean_target_phrase(value)
+        lowered = query.lower()
 
+        replacements: dict[str, str] = {
+            "all files": "*",
+            "everything": "*",
+            "all pdfs": "*.pdf",
+            "pdfs": "*.pdf",
+            "all txt files": "*.txt",
+            "text files": "*.txt",
+            "all log files": "*.log",
+            "logs": "*.log",
+        }
+        for needle, replacement in replacements.items():
+            if lowered == needle:
+                return replacement
 
-def get_engine() -> NLPEngine:
-    """Get or create the global NLP engine instance"""
-    global _engine
-    if _engine is None:
-        _engine = NLPEngine()
-    return _engine
+        if lowered.startswith("my "):
+            return query[3:].strip()
+        return query

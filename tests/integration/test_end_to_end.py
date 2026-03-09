@@ -16,10 +16,10 @@ class StubDesktopEnvironment:
 
 
 def test_end_to_end_launch_flow() -> None:
-    engine = NLPEngine()
+    engine = NLPEngine(enable_llm_fallback=False)
     intent = engine.parse("open firefox")
     context = ExecutionContext.from_runtime(skip_confirmations=True)
-    router = CommandRouter(handlers=[AppManagementHandler(desktop_env=StubDesktopEnvironment())]) # type: ignore
+    router = CommandRouter(handlers=[AppManagementHandler(desktop_env=StubDesktopEnvironment())])  # type: ignore[arg-type]
 
     result = router.route(intent, context)
 

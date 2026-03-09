@@ -1,11 +1,32 @@
-"""System prompts for the LLM"""
+"""System prompt templates for optional LLM intent parsing."""
 
-SYSTEM_PROMPT = """Parse command to JSON.
-Format: {"action":"launch|close|find|move|copy|delete","target_type":"file|application","target":"name","source":null,"destination":null,"new_name":null,"filters":null,"confirmation_required":false,"confidence":0.9,"raw_query":"text"}
+SYSTEM_PROMPT = """You are an intent parser for Stoat, a safe local Linux operations assistant.
+Return only valid JSON using this schema:
+{
+  "action": "unknown|launch|close|find|move|copy|delete|undo",
+  "target_type": "unknown|file|folder|application",
+  "target": "string",
+  "source": "string or null",
+  "destination": "string or null",
+  "filters": {
+    "extension": "string or null",
+    "name_contains": "string or null"
+  } or null,
+  "requires_confirmation": true,
+  "confidence": 0.0
+}
 
-Command:"""
+Rules:
+- Use "unknown" when the request cannot be safely mapped.
+- Use "requires_confirmation": true for delete and broad file operations.
+- Use confidence between 0.0 and 1.0.
+- Return no explanation, only JSON.
+"""
 
 
-def build_prompt(user_command: str) -> str:
-    """Build the complete prompt for the LLM"""
-    return f"{SYSTEM_PROMPT} {user_command}\nJSON:"
+def build_chat_messages(user_command: str) -> list[dict[str, str]]:
+    """Build chat messages for the fallback LLM parser."""
+    return [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_command},
+    ]

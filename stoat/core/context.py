@@ -1,6 +1,8 @@
 """Execution context shared across handlers."""
 
-from dataclasses import dataclass
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 
@@ -11,8 +13,13 @@ class ExecutionContext:
     cwd: Path
     home: Path
     skip_confirmations: bool = False
+    confirmed_action: bool = False
 
     @classmethod
     def from_runtime(cls, skip_confirmations: bool = False) -> "ExecutionContext":
         """Build context from the current environment."""
         return cls(cwd=Path.cwd(), home=Path.home(), skip_confirmations=skip_confirmations)
+
+    def with_confirmation(self) -> "ExecutionContext":
+        """Return a copy marked as explicitly confirmed by the user."""
+        return replace(self, confirmed_action=True)

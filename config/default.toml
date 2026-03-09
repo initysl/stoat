@@ -6,7 +6,7 @@ max_tokens = 512
 timeout = 30
 
 [safety]
-require_confirmation = ["delete", "uninstall", "move_multiple"]
+require_confirmation = ["delete", "move", "undo"]
 protected_paths = ["/etc", "/usr", "/bin", "/boot", "/sys", "/proc"]
 max_batch_size = 100
 enable_undo = true

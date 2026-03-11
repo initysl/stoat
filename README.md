@@ -80,7 +80,7 @@ uv sync --extra dev
 uv run pytest -q
 uv run ruff check stoat tests
 uv run black --check stoat tests
-uv build
+uv run python -Im build --sdist --wheel --outdir dist
 ```
 
 ## License

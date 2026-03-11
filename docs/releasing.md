@@ -15,7 +15,7 @@ This project currently uses:
 uv sync --extra dev
 uv run pytest -q
 uv run ruff check stoat tests
-uv build --no-build-isolation
+uv run python -Im build --sdist --wheel --outdir dist
 ```
 3. Update the version in `pyproject.toml`.
 4. Move relevant items from `Unreleased` in `CHANGELOG.md` into a new version section.
@@ -40,6 +40,7 @@ When a tag matching `v*` is pushed, the release workflow:
 
 ## Notes
 
-- Use `uv build --no-build-isolation` locally if your environment has cross-filesystem build issues.
+- Use `uv run python -Im build --sdist --wheel --outdir dist` locally to mirror the release
+  workflow. The `-I` flag avoids local path shadowing from the repo's `build/` directory.
 - Optional LLM support is not required for the main release artifact.
 - Do not create release tags before the changelog and version are updated together.

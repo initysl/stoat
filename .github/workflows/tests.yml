@@ -33,7 +33,7 @@ jobs:
       run: uv run pytest --cov=stoat --cov-report=xml
 
     - name: Build package
-      run: uv build
+      run: uv run python -Im build --sdist --wheel --outdir dist
 
     - name: Smoke test wheel install
       run: |

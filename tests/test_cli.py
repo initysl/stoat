@@ -8,7 +8,15 @@ import sys
 from click.testing import CliRunner
 
 from stoat.cli import _resolve_skip_confirmations, app
-from stoat.config import Config, LLMConfig, LoggingConfig, SafetyConfig, SearchConfig, UndoConfig
+from stoat.config import (
+    Config,
+    LLMConfig,
+    LoggingConfig,
+    ParserConfig,
+    SafetyConfig,
+    SearchConfig,
+    UndoConfig,
+)
 
 
 runner = CliRunner()
@@ -16,6 +24,7 @@ runner = CliRunner()
 
 def _test_config(root) -> Config:
     return Config(
+        parser=ParserConfig(mode="rule", confidence_threshold=0.7),
         llm=LLMConfig(),
         safety=SafetyConfig(
             require_confirmation=["delete", "move", "undo"],

@@ -14,6 +14,24 @@ STOAT_CONFIG_PATH=/path/to/config.toml stoat doctor --json
 
 ## Active Configuration Keys
 
+### `parser`
+
+Controls which parser policy Stoat uses.
+
+```toml
+[parser]
+mode = "rule"
+confidence_threshold = 0.7
+```
+
+Supported modes:
+
+- `rule`: deterministic parsing only
+- `hybrid`: rules first, then optional LLM fallback
+- `llm`: LLM parser only
+
+The default release behavior is `rule`.
+
 ### `llm`
 
 Optional parser-backend settings. The current CLI works without any LLM.

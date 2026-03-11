@@ -1,7 +1,34 @@
 """Tests for rule-first NLP parsing."""
 
-from stoat.core.intent_schema import Intent, IntentAction
+import pytest
+
+from stoat.core.intent_schema import Intent, IntentAction, LowConfidenceError
 from stoat.core.nlp_engine import NLPEngine
+
+
+class StubRuleBackend:
+    def parse(self, user_command: str) -> Intent:
+        return Intent(action=IntentAction.UNKNOWN, target="", raw_text=user_command, confidence=0.0)
+
+
+class StubLLMBackend:
+    def parse(self, user_command: str) -> Intent | None:
+        return Intent(
+            action=IntentAction.FIND,
+            target="resume",
+            raw_text=user_command,
+            confidence=0.95,
+        )
+
+
+class LowConfidenceLLMBackend:
+    def parse(self, user_command: str) -> Intent | None:
+        return Intent(
+            action=IntentAction.FIND,
+            target="resume",
+            raw_text=user_command,
+            confidence=0.4,
+        )
 
 
 def test_parse_launch_command() -> None:
@@ -194,17 +221,11 @@ def test_parse_battery_status() -> None:
 
 
 def test_llm_fallback_used_for_unknown_command(monkeypatch) -> None:
-    engine = NLPEngine(enable_llm_fallback=True)
-
-    def fake_parse_with_llm(_: str) -> Intent:
-        return Intent(
-            action=IntentAction.FIND,
-            target="resume",
-            confidence=0.91,
-            raw_text="please locate my resume",
-        )
-
-    monkeypatch.setattr(engine, "_parse_with_llm", fake_parse_with_llm)
+    engine = NLPEngine(
+        parser_mode="hybrid",
+        rule_backend=StubRuleBackend(),
+        llm_backend=StubLLMBackend(),
+    )
 
     intent = engine.parse("please locate my resume")
 
@@ -212,10 +233,83 @@ def test_llm_fallback_used_for_unknown_command(monkeypatch) -> None:
     assert intent.target == "resume"
 
 
-def test_llm_fallback_failure_returns_unknown(monkeypatch) -> None:
-    engine = NLPEngine(enable_llm_fallback=True)
-    monkeypatch.setattr(engine, "_parse_with_llm", lambda _: None)
+def test_hybrid_mode_without_llm_result_returns_unknown() -> None:
+    class NoneLLMBackend:
+        def parse(self, user_command: str) -> Intent | None:
+            return None
+
+    engine = NLPEngine(
+        parser_mode="hybrid",
+        rule_backend=StubRuleBackend(),
+        llm_backend=NoneLLMBackend(),  # type: ignore[arg-type]
+    )
 
     intent = engine.parse("please optimize my machine")
 
     assert intent.action == IntentAction.UNKNOWN
+
+
+def test_engine_supports_injected_parser_backends() -> None:
+    engine = NLPEngine(
+        parser_mode="hybrid",
+        rule_backend=StubRuleBackend(),
+        llm_backend=StubLLMBackend(),
+    )
+
+    intent = engine.parse("please locate my resume")
+
+    assert intent.action == IntentAction.FIND
+    assert intent.target == "resume"
+
+
+def test_rule_mode_ignores_llm_backend() -> None:
+    engine = NLPEngine(
+        parser_mode="rule",
+        rule_backend=StubRuleBackend(),
+        llm_backend=StubLLMBackend(),
+    )
+
+    intent = engine.parse("please locate my resume")
+
+    assert intent.action == IntentAction.UNKNOWN
+
+
+def test_llm_mode_uses_llm_backend_directly() -> None:
+    engine = NLPEngine(
+        parser_mode="llm",
+        rule_backend=StubRuleBackend(),
+        llm_backend=StubLLMBackend(),
+    )
+
+    intent = engine.parse("please locate my resume")
+
+    assert intent.action == IntentAction.FIND
+    assert intent.target == "resume"
+
+
+def test_llm_mode_returns_unknown_when_backend_unavailable() -> None:
+    class NoneLLMBackend:
+        def parse(self, user_command: str) -> Intent | None:
+            return None
+
+    engine = NLPEngine(
+        parser_mode="llm",
+        rule_backend=StubRuleBackend(),
+        llm_backend=NoneLLMBackend(),  # type: ignore[arg-type]
+    )
+
+    intent = engine.parse("please locate my resume")
+
+    assert intent.action == IntentAction.UNKNOWN
+
+
+def test_hybrid_mode_raises_on_low_confidence_llm_result() -> None:
+    engine = NLPEngine(
+        parser_mode="hybrid",
+        rule_backend=StubRuleBackend(),
+        llm_backend=LowConfidenceLLMBackend(),
+        confidence_threshold=0.7,
+    )
+
+    with pytest.raises(LowConfidenceError):
+        engine.parse("please locate my resume")

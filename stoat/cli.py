@@ -74,8 +74,9 @@ def _build_parser(config: Config) -> NLPEngine:
     return NLPEngine(
         model=config.llm.model,
         temperature=config.llm.temperature,
-        confidence_threshold=0.7,
-        enable_llm_fallback=False,
+        confidence_threshold=config.parser.confidence_threshold,
+        enable_llm_fallback=config.parser.mode == "hybrid",
+        parser_mode=config.parser.mode,
     )
 
 

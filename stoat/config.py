@@ -18,6 +18,19 @@ class LLMConfig(BaseModel):
     timeout: int = Field(default=30, gt=0)
 
 
+class ParserConfig(BaseModel):
+    mode: str = "rule"
+    confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, value: str) -> str:
+        normalized = value.lower()
+        if normalized not in {"rule", "hybrid", "llm"}:
+            raise ValueError("Parser mode must be one of rule, hybrid, llm")
+        return normalized
+
+
 class SafetyConfig(BaseModel):
     require_confirmation: list[str] = ["delete", "move", "undo"]
     protected_paths: list[str] = ["/etc", "/usr", "/bin", "/boot", "/sys", "/proc"]
@@ -76,6 +89,7 @@ class UndoConfig(BaseModel):
 
 
 class Config(BaseModel):
+    parser: ParserConfig = ParserConfig()
     llm: LLMConfig = LLMConfig()
     safety: SafetyConfig = SafetyConfig()
     search: SearchConfig = SearchConfig()

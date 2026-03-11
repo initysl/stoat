@@ -155,6 +155,70 @@ def _emit_result(
     console.print(f"[{style}]{message}[/{style}]")
 
 
+def _path_probe(path: Path, *, directory: bool) -> dict[str, bool | str]:
+    """Probe whether a file or directory path looks usable for Stoat runtime state."""
+    target = path if directory else path.parent
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        if directory:
+            writable = target.is_dir() and target.exists()
+        else:
+            probe = path
+            with probe.open("a", encoding="utf-8"):
+                pass
+            writable = probe.exists()
+    except OSError:
+        writable = False
+
+    return {
+        "path": str(path),
+        "exists": path.exists(),
+        "writable": writable,
+    }
+
+
+def _build_doctor_diagnostics(config: Config) -> dict[str, bool | str]:
+    config_path = Config.resolve_path()
+    log_path = Path(config.logging.file).expanduser()
+    undo_path = Path(config.undo.storage_path).expanduser()
+
+    diagnostics = {
+        "config_valid": True,
+        "config_path": str(config_path),
+        "config_exists": config_path.exists(),
+        "platform": platform.platform(),
+        "python_version": platform.python_version(),
+        "cwd": str(Path.cwd()),
+        "home": str(Path.home()),
+        "llm_backend_available": importlib.util.find_spec("ollama") is not None,
+    }
+    diagnostics.update(
+        {
+            "log_path": str(log_path),
+            "log_directory_exists": log_path.parent.exists(),
+            "log_path_writable": bool(_path_probe(log_path, directory=False)["writable"]),
+            "undo_path": str(undo_path),
+            "undo_directory_exists": undo_path.exists() or undo_path.parent.exists(),
+            "undo_path_writable": bool(_path_probe(undo_path, directory=True)["writable"]),
+        }
+    )
+    return diagnostics
+
+
+def _render_doctor_summary(diagnostics: dict[str, bool | str]) -> None:
+    """Print a readable text-mode diagnostics summary."""
+    console.print("[bold green]Stoat doctor summary[/bold green]")
+    console.print(f"Config path: {diagnostics['config_path']}")
+    console.print(f"Config exists: {diagnostics['config_exists']}")
+    console.print(f"Platform: {diagnostics['platform']}")
+    console.print(f"Python: {diagnostics['python_version']}")
+    console.print(f"Log path: {diagnostics['log_path']}")
+    console.print(f"Log writable: {diagnostics['log_path_writable']}")
+    console.print(f"Undo path: {diagnostics['undo_path']}")
+    console.print(f"Undo writable: {diagnostics['undo_path_writable']}")
+    console.print(f"Ollama available: {diagnostics['llm_backend_available']}")
+
+
 def _summarize_confirmation(intent: Intent, context: ExecutionContext) -> str:
     if intent.action in {IntentAction.MOVE, IntentAction.COPY}:
         source = intent.source or str(context.cwd)
@@ -424,32 +488,20 @@ def doctor(json_output: bool) -> None:
     """Run basic runtime diagnostics."""
     config = _load_config_or_exit(json_output=json_output, command="doctor")
     logger = configure_logging(config.logging)
-    config_path = Config.resolve_path()
-    log_path = Path(config.logging.file).expanduser()
-    undo_path = Path(config.undo.storage_path).expanduser()
-    diagnostics = {
-        "config_valid": True,
-        "config_path": str(config_path),
-        "config_exists": config_path.exists(),
-        "platform": platform.platform(),
-        "python_version": platform.python_version(),
-        "cwd": str(Path.cwd()),
-        "home": str(Path.home()),
-        "log_path": str(log_path),
-        "log_directory_exists": log_path.parent.exists(),
-        "undo_path": str(undo_path),
-        "undo_directory_exists": undo_path.exists() or undo_path.parent.exists(),
-        "llm_backend_available": importlib.util.find_spec("ollama") is not None,
-    }
+    diagnostics = _build_doctor_diagnostics(config)
     log_event(logger, "cli.doctor.complete", command="doctor", **diagnostics)
-    _emit_result(
-        True,
-        "Diagnostics loaded.",
-        diagnostics,
-        json_output,
-        command="doctor",
-        action="doctor",
-    )
+    if json_output:
+        _emit_result(
+            True,
+            "Diagnostics loaded.",
+            diagnostics,
+            json_output,
+            command="doctor",
+            action="doctor",
+        )
+        return
+
+    _render_doctor_summary(diagnostics)
 
 
 @app.command()

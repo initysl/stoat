@@ -322,17 +322,22 @@ class FileOperationsHandler(BaseHandler):
                         "matches": [
                             {"path": str(match.path), "score": match.score} for match in matches[:5]
                         ],
+                        "suggestions": self._build_clarification_suggestions(
+                            intent.action.value,
+                            matches[:3],
+                        ),
                     }
                 )
                 continue
             resolved.append(matches[0].path.resolve())
 
         if ambiguous:
+            preview_lines = self._format_ambiguous_preview(ambiguous)
             return [], search_roots, HandlerResult(
                 success=False,
                 message=(
                     f"Multiple files matched one or more {intent.action.value} targets. "
-                    "Please be more specific."
+                    f"Please be more specific.\n{preview_lines}"
                 ),
                 details={
                     "action": intent.action.value,
@@ -360,6 +365,29 @@ class FileOperationsHandler(BaseHandler):
 
         deduped = list(dict.fromkeys(resolved))
         return deduped, search_roots, None
+
+    def _format_ambiguous_preview(self, ambiguous: list[dict[str, object]]) -> str:
+        lines: list[str] = []
+        for entry in ambiguous:
+            query = str(entry["query"])
+            lines.append(f"- {query}:")
+            for match in entry["matches"][:3]:  # type: ignore[index]
+                if isinstance(match, dict):
+                    lines.append(f"  - {match['path']}")
+        return "\n".join(lines)
+
+    def _build_clarification_suggestions(
+        self,
+        action: str,
+        matches: list[object],
+    ) -> list[str]:
+        suggestions: list[str] = []
+        for match in matches:
+            path = getattr(match, "path", None)
+            if path is None:
+                continue
+            suggestions.append(f'stoat run "{action} {path}"')
+        return suggestions
 
     def _undo_last_operation(self) -> HandlerResult:
         if not self._enable_undo:

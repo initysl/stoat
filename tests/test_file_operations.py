@@ -405,3 +405,5 @@ def test_semantic_copy_reports_ambiguous_target(temp_dir) -> None:
     assert result.success is False
     assert result.details["error_code"] == "ambiguous_target"
     assert result.details["requested_targets"] == ["avengers"]
+    assert result.details["ambiguous_targets"][0]["suggestions"]
+    assert "stoat run" in result.details["ambiguous_targets"][0]["suggestions"][0]

@@ -243,6 +243,31 @@ def test_cli_json_failure_shape(monkeypatch, sample_files) -> None:
     assert payload["error"]["code"] == "unknown_intent"
 
 
+def test_cli_json_ambiguous_semantic_delete_returns_suggestions(monkeypatch, temp_dir) -> None:
+    videos = temp_dir / "Videos"
+    downloads = temp_dir / "Downloads"
+    videos.mkdir()
+    downloads.mkdir()
+    (videos / "Avengers.mp4").write_text("movie")
+    (downloads / "Avengers.mkv").write_text("movie")
+
+    monkeypatch.chdir(temp_dir)
+    monkeypatch.setattr(
+        "stoat.cli.Config.load",
+        classmethod(lambda cls, config_path=None: _test_config(temp_dir)),
+    )
+
+    result = runner.invoke(app, ["run", "--json", "--yes", "delete the movie avengers"])
+
+    payload = json.loads(result.stdout)
+
+    assert result.exit_code == 1
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "ambiguous_target"
+    assert payload["error"]["details"]["ambiguous_targets"][0]["query"] == "avengers"
+    assert payload["error"]["details"]["ambiguous_targets"][0]["suggestions"]
+
+
 def test_cli_doctor_json_output(monkeypatch, sample_files) -> None:
     monkeypatch.chdir(sample_files)
     monkeypatch.setenv("STOAT_CONFIG_PATH", str(sample_files / ".config" / "stoat" / "config.toml"))

@@ -1,5 +1,5 @@
 [llm]
-model = "llama3.2:3b-instruct-q4_K_M"
+model = "qwen3:4b"
 base_url = "http://localhost:11434"
 temperature = 0.1
 max_tokens = 512

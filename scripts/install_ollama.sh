@@ -3,7 +3,7 @@
 
 set -e
 
-MODEL="${STOAT_OLLAMA_MODEL:-llama3.2:3b-instruct-q4_K_M}"
+MODEL="${STOAT_OLLAMA_MODEL:-qwen3:4b}"
 
 echo "Installing Ollama..."
 curl -fsSL https://ollama.ai/install.sh | sh

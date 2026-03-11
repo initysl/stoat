@@ -16,7 +16,7 @@ class NLPEngine:
 
     def __init__(
         self,
-        model: str = "llama3.2:3b-instruct-q4_K_M",
+        model: str = "qwen3:4b",
         confidence_threshold: float = 0.7,
         temperature: float = 0.1,
         enable_llm_fallback: bool = True,

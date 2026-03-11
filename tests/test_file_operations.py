@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from stoat.core.context import ExecutionContext
-from stoat.core.intent_schema import Intent, IntentAction, TargetType
+from stoat.core.intent_schema import FileFilters, Intent, IntentAction, TargetType
 from stoat.handlers.file_operations import FileOperationsHandler
 from stoat.integrations.file_system import FileSystem
 from stoat.integrations.search_engine import SearchEngine
@@ -244,3 +244,97 @@ def test_broad_delete_requires_explicit_confirmation(sample_files) -> None:
 
     assert result.success is False
     assert "explicit confirmation" in result.message.lower()
+
+
+def test_semantic_delete_resolves_single_movie_match(temp_dir) -> None:
+    videos = temp_dir / "Videos"
+    videos.mkdir()
+    movie = videos / "Avengers.mp4"
+    movie.write_text("assembled")
+
+    handler = _build_handler(temp_dir)
+    context = ExecutionContext(cwd=temp_dir, home=temp_dir).with_confirmation()
+    intent = Intent(
+        action=IntentAction.DELETE,
+        target_type=TargetType.FILE,
+        target="avengers",
+        target_items=["avengers"],
+        filters=FileFilters(
+            category="video",
+            extensions=[".mp4", ".mkv", ".avi", ".mov", ".webm"],
+            preferred_roots=["~/Videos", "~/Downloads", "~/Desktop"],
+        ),
+        confidence=0.95,
+        raw_text="delete the movie avengers",
+        requires_confirmation=True,
+    )
+
+    result = handler.handle(intent, context)
+
+    assert result.success is True
+    assert movie.exists() is False
+    assert result.details["requested_targets"] == ["avengers"]
+
+
+def test_semantic_delete_reports_ambiguous_target(temp_dir) -> None:
+    videos = temp_dir / "Videos"
+    downloads = temp_dir / "Downloads"
+    videos.mkdir()
+    downloads.mkdir()
+    (videos / "Avengers.mp4").write_text("movie")
+    (downloads / "Avengers.mkv").write_text("movie")
+
+    handler = _build_handler(temp_dir)
+    context = ExecutionContext(cwd=temp_dir, home=temp_dir).with_confirmation()
+    intent = Intent(
+        action=IntentAction.DELETE,
+        target_type=TargetType.FILE,
+        target="avengers",
+        target_items=["avengers"],
+        filters=FileFilters(
+            category="video",
+            extensions=[".mp4", ".mkv", ".avi", ".mov", ".webm"],
+            preferred_roots=["~/Videos", "~/Downloads", "~/Desktop"],
+        ),
+        confidence=0.95,
+        raw_text="delete the movie avengers",
+        requires_confirmation=True,
+    )
+
+    result = handler.handle(intent, context)
+
+    assert result.success is False
+    assert result.details["error_code"] == "ambiguous_target"
+    assert result.details["ambiguous_targets"][0]["query"] == "avengers"
+
+
+def test_semantic_delete_resolves_multiple_movie_targets(temp_dir) -> None:
+    videos = temp_dir / "Videos"
+    videos.mkdir()
+    avengers = videos / "Avengers.mp4"
+    power_rangers = videos / "Power Rangers.mp4"
+    avengers.write_text("movie")
+    power_rangers.write_text("movie")
+
+    handler = _build_handler(temp_dir)
+    context = ExecutionContext(cwd=temp_dir, home=temp_dir).with_confirmation()
+    intent = Intent(
+        action=IntentAction.DELETE,
+        target_type=TargetType.FILE,
+        target="*",
+        target_items=["avengers", "power rangers"],
+        filters=FileFilters(
+            category="video",
+            extensions=[".mp4", ".mkv", ".avi", ".mov", ".webm"],
+            preferred_roots=["~/Videos", "~/Downloads", "~/Desktop"],
+        ),
+        confidence=0.95,
+        raw_text="delete the movies avengers and power rangers",
+        requires_confirmation=True,
+    )
+
+    result = handler.handle(intent, context)
+
+    assert result.success is True
+    assert avengers.exists() is False
+    assert power_rangers.exists() is False

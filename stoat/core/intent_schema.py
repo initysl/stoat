@@ -34,9 +34,11 @@ class TargetType(str, Enum):
 class FileFilters(BaseModel):
     """Optional file filters retained for parser compatibility."""
 
+    category: str | None = None
     extension: str | None = None
     extensions: list[str] | None = None
     name_contains: str | None = None
+    preferred_roots: list[str] | None = None
     sort_by: str | None = None
     descending: bool = False
     limit: int | None = None
@@ -49,6 +51,7 @@ class Intent(BaseModel):
     action: IntentAction = Field(default=IntentAction.UNKNOWN)
     target_type: TargetType = Field(default=TargetType.UNKNOWN)
     target: str = Field(default="")
+    target_items: list[str] | None = None
     source: str | None = None
     destination: str | None = None
     filters: FileFilters | None = None
@@ -58,7 +61,8 @@ class Intent(BaseModel):
 
     @model_validator(mode="after")
     def validate_required_fields(self) -> "Intent":
-        if self.action not in {IntentAction.UNKNOWN, IntentAction.UNDO} and not self.target.strip():
+        has_target = bool(self.target.strip()) or bool(self.target_items)
+        if self.action not in {IntentAction.UNKNOWN, IntentAction.UNDO} and not has_target:
             raise ValueError("Target cannot be empty for executable intents.")
         return self
 
@@ -77,6 +81,8 @@ class Intent(BaseModel):
 
     def to_summary(self) -> str:
         parts = [f"action={self.action.value}", f"target={self.target or '-'}"]
+        if self.target_items:
+            parts.append(f"target_items={','.join(self.target_items)}")
         if self.source:
             parts.append(f"source={self.source}")
         if self.destination:

@@ -166,3 +166,39 @@ def test_search_engine_respects_modified_within_days_filter(temp_dir: Path) -> N
 
     assert any(match.path.name == "recent.txt" for match in matches)
     assert all(match.path.name != "older.txt" for match in matches)
+
+
+def test_search_handler_uses_preferred_roots_as_hints(temp_dir: Path) -> None:
+    videos = temp_dir / "Videos"
+    videos.mkdir()
+    downloads = temp_dir / "Downloads"
+    downloads.mkdir()
+    (videos / "Avengers.mp4").write_text("video")
+    (downloads / "Power Rangers.mp4").write_text("video")
+
+    handler = SearchHandler(
+        search_engine=SearchEngine(index_hidden_files=False, max_results=10),
+        file_system=FileSystem(
+            search_engine=SearchEngine(index_hidden_files=False, max_results=10)
+        ),
+    )
+    context = ExecutionContext(cwd=temp_dir, home=temp_dir)
+    intent = Intent(
+        action=IntentAction.FIND,
+        target_type=TargetType.FILE,
+        target="*",
+        filters=FileFilters(
+            category="video",
+            extensions=[".mp4", ".mkv", ".avi", ".mov", ".webm"],
+            preferred_roots=["~/Videos", "~/Downloads"],
+        ),
+        confidence=0.9,
+        raw_text="find all my movies",
+    )
+
+    result = handler.handle(intent, context)
+
+    assert result.success is True
+    assert len(result.details["matches"]) == 2
+    assert any(match["path"].endswith("Avengers.mp4") for match in result.details["matches"])
+    assert any(match["path"].endswith("Power Rangers.mp4") for match in result.details["matches"])

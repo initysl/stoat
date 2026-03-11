@@ -31,3 +31,7 @@ class ExecutionContext:
     def with_confirmation(self) -> "ExecutionContext":
         """Return a copy marked as explicitly confirmed by the user."""
         return replace(self, confirmed_action=True)
+
+    def as_dry_run(self) -> "ExecutionContext":
+        """Return a copy that performs preview-only execution."""
+        return replace(self, dry_run=True)

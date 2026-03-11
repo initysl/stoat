@@ -77,18 +77,58 @@ GENERIC_CLEANUPS: tuple[str, ...] = (
 )
 
 SEMANTIC_ALIASES: dict[str, object | None] = {
-    "doc": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
-    "docs": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
-    "document": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
-    "documents": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
+    "doc": {
+        "category": "document",
+        "extensions": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
+        "preferred_roots": ["~/Documents", "~/Downloads", "~/Desktop"],
+    },
+    "docs": {
+        "category": "document",
+        "extensions": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
+        "preferred_roots": ["~/Documents", "~/Downloads", "~/Desktop"],
+    },
+    "document": {
+        "category": "document",
+        "extensions": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
+        "preferred_roots": ["~/Documents", "~/Downloads", "~/Desktop"],
+    },
+    "documents": {
+        "category": "document",
+        "extensions": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
+        "preferred_roots": ["~/Documents", "~/Downloads", "~/Desktop"],
+    },
     "pdf": ".pdf",
     "pdfs": ".pdf",
-    "image": [".png", ".jpg", ".jpeg", ".webp", ".gif"],
-    "images": [".png", ".jpg", ".jpeg", ".webp", ".gif"],
-    "photo": [".png", ".jpg", ".jpeg", ".webp", ".gif"],
-    "photos": [".png", ".jpg", ".jpeg", ".webp", ".gif"],
-    "picture": [".png", ".jpg", ".jpeg", ".webp", ".gif"],
-    "pictures": [".png", ".jpg", ".jpeg", ".webp", ".gif"],
+    "image": {
+        "category": "image",
+        "extensions": [".png", ".jpg", ".jpeg", ".webp", ".gif"],
+        "preferred_roots": ["~/Pictures", "~/Downloads", "~/Desktop"],
+    },
+    "images": {
+        "category": "image",
+        "extensions": [".png", ".jpg", ".jpeg", ".webp", ".gif"],
+        "preferred_roots": ["~/Pictures", "~/Downloads", "~/Desktop"],
+    },
+    "photo": {
+        "category": "image",
+        "extensions": [".png", ".jpg", ".jpeg", ".webp", ".gif"],
+        "preferred_roots": ["~/Pictures", "~/Downloads", "~/Desktop"],
+    },
+    "photos": {
+        "category": "image",
+        "extensions": [".png", ".jpg", ".jpeg", ".webp", ".gif"],
+        "preferred_roots": ["~/Pictures", "~/Downloads", "~/Desktop"],
+    },
+    "picture": {
+        "category": "image",
+        "extensions": [".png", ".jpg", ".jpeg", ".webp", ".gif"],
+        "preferred_roots": ["~/Pictures", "~/Downloads", "~/Desktop"],
+    },
+    "pictures": {
+        "category": "image",
+        "extensions": [".png", ".jpg", ".jpeg", ".webp", ".gif"],
+        "preferred_roots": ["~/Pictures", "~/Downloads", "~/Desktop"],
+    },
     "screenshot": {
         "extensions": [".png", ".jpg", ".jpeg", ".webp", ".gif"],
         "name_contains": "screenshot",
@@ -109,15 +149,47 @@ SEMANTIC_ALIASES: dict[str, object | None] = {
     "archives": [".zip", ".tar", ".gz", ".rar", ".7z"],
     "zip": ".zip",
     "zips": ".zip",
-    "video": [".mp4", ".mov", ".mkv", ".avi", ".webm"],
-    "videos": [".mp4", ".mov", ".mkv", ".avi", ".webm"],
-    "music": [".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a"],
-    "audio": [".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a"],
+    "movie": {
+        "category": "video",
+        "extensions": [".mp4", ".mov", ".mkv", ".avi", ".webm"],
+        "preferred_roots": ["~/Videos", "~/Downloads", "~/Desktop"],
+    },
+    "movies": {
+        "category": "video",
+        "extensions": [".mp4", ".mov", ".mkv", ".avi", ".webm"],
+        "preferred_roots": ["~/Videos", "~/Downloads", "~/Desktop"],
+    },
+    "video": {
+        "category": "video",
+        "extensions": [".mp4", ".mov", ".mkv", ".avi", ".webm"],
+        "preferred_roots": ["~/Videos", "~/Downloads", "~/Desktop"],
+    },
+    "videos": {
+        "category": "video",
+        "extensions": [".mp4", ".mov", ".mkv", ".avi", ".webm"],
+        "preferred_roots": ["~/Videos", "~/Downloads", "~/Desktop"],
+    },
+    "music": {
+        "category": "audio",
+        "extensions": [".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a"],
+        "preferred_roots": ["~/Music", "~/Downloads", "~/Desktop"],
+    },
+    "audio": {
+        "category": "audio",
+        "extensions": [".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a"],
+        "preferred_roots": ["~/Music", "~/Downloads", "~/Desktop"],
+    },
     "file": None,
     "files": None,
     "download": None,
     "downloads": None,
 }
+
+DELETE_FILLER_PHRASES: tuple[str, ...] = (
+    r"\b(named|called)\b",
+    r"\bwith\s+(?:the\s+)?name\b",
+    r"\bwith\s+this(?:\s+this)?\s+name\b",
+)
 
 SYSTEM_INFO_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"^(?:show|check)\s+disk(?:\s+usage|\s+space)?$", "disk_usage"),
@@ -256,15 +328,18 @@ class RuleParserBackend(ParserBackend):
             flags=re.IGNORECASE,
         )
         if delete_match:
+            target, filters, target_items = self._parse_delete_query(delete_match.group(1))
             return Intent(
                 action=IntentAction.DELETE,
                 target_type=TargetType.FILE,
-                target=self._normalize_file_query(delete_match.group(1)),
+                target=target,
+                target_items=target_items,
                 source=(
                     self._clean_target_phrase(delete_match.group(2))
                     if delete_match.group(2)
                     else None
                 ),
+                filters=filters,
                 requires_confirmation=True,
                 confidence=0.93,
                 raw_text=text,
@@ -336,7 +411,8 @@ class RuleParserBackend(ParserBackend):
         query, source = self._strip_source_terms(query, source)
         lowered = query.lower()
 
-        if self._apply_semantic_alias(lowered, filters):
+        semantic_query = self._semantic_key(lowered)
+        if self._apply_semantic_alias(semantic_query, filters):
             return "*", filters, source
 
         containing_target = self._extract_containing_target(lowered, filters)
@@ -349,6 +425,22 @@ class RuleParserBackend(ParserBackend):
 
         normalized = self._normalize_file_query(query)
         return self._finalize_find_result(normalized, filters, source)
+
+    def _parse_delete_query(
+        self,
+        value: str,
+    ) -> tuple[str, FileFilters | None, list[str] | None]:
+        query = self._clean_target_phrase(value)
+        filters = FileFilters()
+        lowered = query.lower()
+
+        semantic_match = self._extract_semantic_category_query(lowered, filters)
+        if semantic_match is not None:
+            target, target_items = semantic_match
+            return target, filters, target_items
+
+        normalized = self._normalize_file_query(query)
+        return normalized, None, None
 
     def _extract_source_alias(self, lowered: str) -> str | None:
         for word, path in SOURCE_ALIASES:
@@ -401,14 +493,65 @@ class RuleParserBackend(ParserBackend):
             filters.extension = alias
             return True
         if isinstance(alias, dict):
+            alias_category = alias.get("category")
             alias_extensions = alias.get("extensions")
             alias_name_contains = alias.get("name_contains")
+            alias_preferred_roots = alias.get("preferred_roots")
+            if isinstance(alias_category, str):
+                filters.category = alias_category
             if isinstance(alias_extensions, list):
                 filters.extensions = [str(value) for value in alias_extensions]
             if isinstance(alias_name_contains, str):
                 filters.name_contains = alias_name_contains
+            if isinstance(alias_preferred_roots, list):
+                filters.preferred_roots = [str(value) for value in alias_preferred_roots]
             return True
         return False
+
+    def _semantic_key(self, lowered: str) -> str:
+        return self._trim_noise(
+            re.sub(r"\b(all|my|the)\b", "", lowered, flags=re.IGNORECASE)
+        ).lower()
+
+    def _extract_semantic_category_query(
+        self,
+        lowered: str,
+        filters: FileFilters,
+    ) -> tuple[str, list[str] | None] | None:
+        semantic_phrase = self._semantic_key(lowered)
+        if not semantic_phrase:
+            return None
+
+        candidates = sorted(SEMANTIC_ALIASES.keys(), key=len, reverse=True)
+        for candidate in candidates:
+            if semantic_phrase == candidate:
+                if self._apply_semantic_alias(candidate, filters):
+                    return "*", None
+                return None
+
+            if semantic_phrase.startswith(f"{candidate} "):
+                if not self._apply_semantic_alias(candidate, filters):
+                    return None
+                raw_remainder = self._trim_noise(semantic_phrase[len(candidate) :])
+                remainder = raw_remainder
+                for pattern in DELETE_FILLER_PHRASES:
+                    remainder = re.sub(pattern, "", remainder, flags=re.IGNORECASE)
+                remainder = self._trim_noise(remainder)
+                target_items = self._split_target_items(remainder)
+                if raw_remainder and not target_items:
+                    return None
+                target = target_items[0] if len(target_items) == 1 else "*"
+                return target, target_items or None
+
+        return None
+
+    def _split_target_items(self, remainder: str) -> list[str]:
+        cleaned = remainder.strip(" ,")
+        if not cleaned:
+            return []
+        cleaned = re.sub(r"\s*,\s*", ",", cleaned)
+        parts = re.split(r"\s+and\s+|,", cleaned)
+        return [self._trim_noise(part) for part in parts if self._trim_noise(part)]
 
     def _extract_containing_target(self, lowered: str, filters: FileFilters) -> str | None:
         containing_match = re.match(r"^(?:files?\s+)?containing\s+(.+)$", lowered)

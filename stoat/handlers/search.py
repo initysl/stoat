@@ -26,7 +26,13 @@ class SearchHandler(BaseHandler):
 
     def handle(self, intent: Intent, context: ExecutionContext) -> HandlerResult:
         base_dir = self._file_system.resolve_path(intent.source, cwd=context.cwd, home=context.home)
-        matches = self._search_engine.search(base_dir, intent.target, intent.filters)
+        matches, search_roots = self._file_system.search_matches(
+            intent.target,
+            base_dir=base_dir,
+            home=context.home,
+            filters=intent.filters,
+            explicit_source=bool(intent.source),
+        )
         if not matches:
             return HandlerResult(
                 success=False,
@@ -37,6 +43,7 @@ class SearchHandler(BaseHandler):
                     "count": 0,
                     "target": intent.target,
                     "matches": [],
+                    "search_roots": [str(root) for root in search_roots],
                     "filters": intent.filters.model_dump() if intent.filters else None,
                 },
             )
@@ -49,6 +56,7 @@ class SearchHandler(BaseHandler):
                 "action": intent.action.value,
                 "count": len(matches),
                 "matches": [{"path": str(match.path), "score": match.score} for match in matches],
+                "search_roots": [str(root) for root in search_roots],
                 "filters": intent.filters.model_dump() if intent.filters else None,
             },
         )

@@ -27,6 +27,34 @@ class SearchEngine:
     def search(
         self, base_dir: Path, query: str, filters: FileFilters | None = None
     ) -> list[SearchMatch]:
+        return self.search_many([base_dir], query, filters)
+
+    def search_many(
+        self,
+        base_dirs: list[Path],
+        query: str,
+        filters: FileFilters | None = None,
+    ) -> list[SearchMatch]:
+        matches_by_path: dict[Path, SearchMatch] = {}
+        for base_dir in base_dirs:
+            if not base_dir.exists():
+                continue
+            for match in self._search_in_root(base_dir, query, filters):
+                current = matches_by_path.get(match.path)
+                if current is None or match.score > current.score:
+                    matches_by_path[match.path] = match
+
+        matches = list(matches_by_path.values())
+        self._sort_matches(matches, filters)
+        limit = filters.limit if filters and filters.limit is not None else self._max_results
+        return matches[:limit]
+
+    def _search_in_root(
+        self,
+        base_dir: Path,
+        query: str,
+        filters: FileFilters | None = None,
+    ) -> list[SearchMatch]:
         if not base_dir.exists():
             return []
 
@@ -34,7 +62,9 @@ class SearchEngine:
             matches = self._search_by_glob(base_dir, query, filters)
         else:
             matches = self._search_by_score(base_dir, query, filters)
+        return matches
 
+    def _sort_matches(self, matches: list[SearchMatch], filters: FileFilters | None) -> None:
         if filters and filters.sort_by == "modified":
             matches.sort(
                 key=lambda match: (
@@ -51,9 +81,6 @@ class SearchEngine:
             matches.sort(
                 key=lambda match: (-match.score, len(match.path.parts), match.path.name.lower())
             )
-
-        limit = filters.limit if filters and filters.limit is not None else self._max_results
-        return matches[:limit]
 
     def _search_by_glob(
         self,

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 import shutil
 
+from stoat.core.intent_schema import FileFilters
 from stoat.integrations.search_engine import SearchEngine
 
 
@@ -17,15 +18,79 @@ class FileSystem:
     def resolve_path(self, raw_path: str | None, *, cwd: Path, home: Path) -> Path:
         if not raw_path:
             return cwd
-        candidate = Path(raw_path).expanduser()
-        if not candidate.is_absolute():
-            if raw_path.startswith("~"):
-                candidate = home / raw_path[2:]
-            else:
+        if raw_path == "~":
+            candidate = home
+        elif raw_path.startswith("~/"):
+            candidate = home / raw_path[2:]
+        else:
+            candidate = Path(raw_path).expanduser()
+            if not candidate.is_absolute():
                 candidate = cwd / raw_path
         return candidate.resolve()
 
-    def resolve_targets(self, target: str, *, base_dir: Path) -> list[Path]:
+    def resolve_search_roots(
+        self,
+        *,
+        base_dir: Path,
+        home: Path,
+        filters: FileFilters | None = None,
+        explicit_source: bool,
+    ) -> list[Path]:
+        if explicit_source:
+            return [base_dir]
+
+        roots: list[Path] = []
+        if filters and filters.preferred_roots:
+            for raw_root in filters.preferred_roots:
+                roots.append(self.resolve_path(raw_root, cwd=home, home=home))
+
+        roots.append(base_dir)
+
+        unique_roots: list[Path] = []
+        seen: set[Path] = set()
+        for root in roots:
+            if root in seen:
+                continue
+            seen.add(root)
+            unique_roots.append(root)
+        return unique_roots
+
+    def search_matches(
+        self,
+        target: str,
+        *,
+        base_dir: Path,
+        home: Path,
+        filters: FileFilters | None = None,
+        explicit_source: bool,
+    ):
+        search_roots = self.resolve_search_roots(
+            base_dir=base_dir,
+            home=home,
+            filters=filters,
+            explicit_source=explicit_source,
+        )
+        matches = self._search_engine.search_many(search_roots, target, filters)
+        if (
+            not matches
+            and not explicit_source
+            and filters
+            and filters.preferred_roots
+            and home not in search_roots
+        ):
+            search_roots = [*search_roots, home]
+            matches = self._search_engine.search_many(search_roots, target, filters)
+        return matches, search_roots
+
+    def resolve_targets(
+        self,
+        target: str,
+        *,
+        base_dir: Path,
+        home: Path,
+        filters: FileFilters | None = None,
+        explicit_source: bool,
+    ) -> list[Path]:
         explicit = Path(target).expanduser()
         if explicit.is_absolute() and explicit.exists():
             return [explicit.resolve()]
@@ -34,7 +99,14 @@ class FileSystem:
         if relative_candidate.exists():
             return [relative_candidate.resolve()]
 
-        return [match.path.resolve() for match in self._search_engine.search(base_dir, target)]
+        matches, _ = self.search_matches(
+            target,
+            base_dir=base_dir,
+            home=home,
+            filters=filters,
+            explicit_source=explicit_source,
+        )
+        return [match.path.resolve() for match in matches]
 
     def ensure_directory(self, destination: Path) -> Path:
         destination.mkdir(parents=True, exist_ok=True)

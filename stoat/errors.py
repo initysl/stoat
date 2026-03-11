@@ -14,6 +14,7 @@ class ErrorCode(str, Enum):
     UNKNOWN_INTENT = "unknown_intent"
     CANCELLED = "cancelled"
     NOT_FOUND = "not_found"
+    AMBIGUOUS_TARGET = "ambiguous_target"
     PROTECTED_PATH = "protected_path"
     BATCH_LIMIT = "batch_limit"
     COLLISION = "collision"

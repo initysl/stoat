@@ -220,6 +220,44 @@ def test_parse_battery_status() -> None:
     assert intent.target == "battery_status"
 
 
+def test_parse_find_all_my_movies() -> None:
+    engine = NLPEngine(enable_llm_fallback=False)
+
+    intent = engine.parse("find all my movies")
+
+    assert intent.action == IntentAction.FIND
+    assert intent.target == "*"
+    assert intent.filters is not None
+    assert intent.filters.category == "video"
+    assert ".mp4" in (intent.filters.extensions or [])
+    assert "~/Videos" in (intent.filters.preferred_roots or [])
+
+
+def test_parse_delete_the_movie_avengers() -> None:
+    engine = NLPEngine(enable_llm_fallback=False)
+
+    intent = engine.parse("delete the movie avengers")
+
+    assert intent.action == IntentAction.DELETE
+    assert intent.target == "avengers"
+    assert intent.target_items == ["avengers"]
+    assert intent.filters is not None
+    assert intent.filters.category == "video"
+    assert ".mkv" in (intent.filters.extensions or [])
+
+
+def test_parse_delete_multiple_movie_targets() -> None:
+    engine = NLPEngine(enable_llm_fallback=False)
+
+    intent = engine.parse("delete the movies avengers and power rangers")
+
+    assert intent.action == IntentAction.DELETE
+    assert intent.target == "*"
+    assert intent.target_items == ["avengers", "power rangers"]
+    assert intent.filters is not None
+    assert intent.filters.category == "video"
+
+
 def test_llm_fallback_used_for_unknown_command(monkeypatch) -> None:
     engine = NLPEngine(
         parser_mode="hybrid",

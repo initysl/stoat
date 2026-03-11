@@ -276,6 +276,22 @@ def _summarize_confirmation(intent: Intent, context: ExecutionContext) -> str:
     return f"Confirm '{intent.action.value}' for '{intent.target}'?"
 
 
+def _summarize_delete_preview(intent: Intent, preview_details: dict) -> str:
+    items = preview_details.get("items", [])
+    if not isinstance(items, list) or not items:
+        return f"Confirm delete of '{intent.target}'?"
+
+    preview_paths = [
+        str(item.get("original_path"))
+        for item in items[:5]
+        if isinstance(item, dict) and item.get("original_path")
+    ]
+    suffix = "" if len(items) <= 5 else f"\n... and {len(items) - 5} more"
+    heading = f"Confirm delete of {len(items)} item(s):"
+    body = "\n".join(f"- {path}" for path in preview_paths)
+    return f"{heading}\n{body}{suffix}"
+
+
 def _execute_intent(
     intent: Intent,
     *,
@@ -305,15 +321,38 @@ def _execute_intent(
         return 1
 
     if safety.requires_confirmation(intent) and not (context.skip_confirmations or context.dry_run):
+        summary = _summarize_confirmation(intent, context)
+        if intent.action == IntentAction.DELETE:
+            preview_result = router.route(intent, context.as_dry_run())
+            if not preview_result.success:
+                log_event(
+                    logger,
+                    "confirmation.preview_failed",
+                    command=command,
+                    action=intent.action.value,
+                    error_code=preview_result.details.get("error_code"),
+                )
+                _emit_result(
+                    preview_result.success,
+                    preview_result.message,
+                    preview_result.details,
+                    json_output,
+                    command=command,
+                    action=intent.action.value,
+                    dry_run=context.dry_run,
+                )
+                return 1
+            summary = _summarize_delete_preview(intent, preview_result.details)
+
         log_event(
             logger,
             "confirmation.requested",
             command=command,
             action=intent.action.value,
-            summary=_summarize_confirmation(intent, context),
+            summary=summary,
         )
         confirmer = ConfirmationPrompt()
-        confirmed = confirmer.ask(_summarize_confirmation(intent, context))
+        confirmed = confirmer.ask(summary)
         if not confirmed:
             log_event(
                 logger,

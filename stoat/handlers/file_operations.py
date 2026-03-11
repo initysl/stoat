@@ -47,7 +47,32 @@ class FileOperationsHandler(BaseHandler):
             return self._undo_last_operation()
 
         base_dir = self._file_system.resolve_path(intent.source, cwd=context.cwd, home=context.home)
-        matches = self._file_system.resolve_targets(intent.target, base_dir=base_dir)
+        resolution_error: HandlerResult | None = None
+        search_roots: list[Path] = [base_dir]
+        if intent.action == IntentAction.DELETE and intent.target_items:
+            matches, search_roots, resolution_error = self._resolve_named_delete_targets(
+                intent,
+                base_dir=base_dir,
+                context=context,
+            )
+        else:
+            matches = self._file_system.resolve_targets(
+                intent.target,
+                base_dir=base_dir,
+                home=context.home,
+                filters=intent.filters,
+                explicit_source=bool(intent.source),
+            )
+            search_roots = self._file_system.resolve_search_roots(
+                base_dir=base_dir,
+                home=context.home,
+                filters=intent.filters,
+                explicit_source=bool(intent.source),
+            )
+
+        if resolution_error is not None:
+            return resolution_error
+
         if not matches:
             return HandlerResult(
                 success=False,
@@ -57,6 +82,8 @@ class FileOperationsHandler(BaseHandler):
                     "error_code": ErrorCode.NOT_FOUND.value,
                     "count": 0,
                     "matches": [],
+                    "search_roots": [str(root) for root in search_roots],
+                    "filters": intent.filters.model_dump() if intent.filters else None,
                 },
             )
 
@@ -66,8 +93,8 @@ class FileOperationsHandler(BaseHandler):
 
         if intent.action == IntentAction.DELETE:
             if context.dry_run:
-                return self._build_dry_run_result(intent, matches)
-            return self._delete(matches, intent)
+                return self._build_dry_run_result(intent, matches, search_roots=search_roots)
+            return self._delete(matches, intent, search_roots=search_roots)
 
         destination = self._file_system.resolve_path(
             intent.destination,
@@ -142,7 +169,7 @@ class FileOperationsHandler(BaseHandler):
         if (
             intent.action == IntentAction.DELETE
             and intent.target == "*"
-            and not (context.skip_confirmations or context.confirmed_action)
+            and not (context.skip_confirmations or context.confirmed_action or context.dry_run)
         ):
             return HandlerResult(
                 success=False,
@@ -187,6 +214,7 @@ class FileOperationsHandler(BaseHandler):
         matches: list[Path],
         *,
         destination: Path | None = None,
+        search_roots: list[Path] | None = None,
     ) -> HandlerResult:
         if intent.action == IntentAction.DELETE:
             items = [{"original_path": str(path)} for path in matches]
@@ -198,6 +226,8 @@ class FileOperationsHandler(BaseHandler):
                     "dry_run": True,
                     "count": len(items),
                     "items": items,
+                    "search_roots": [str(root) for root in search_roots or []],
+                    "requested_targets": intent.target_items or [intent.target],
                 },
             )
 
@@ -216,15 +246,96 @@ class FileOperationsHandler(BaseHandler):
             },
         )
 
-    def _delete(self, matches: list[Path], intent: Intent) -> HandlerResult:
+    def _delete(
+        self,
+        matches: list[Path],
+        intent: Intent,
+        *,
+        search_roots: list[Path] | None = None,
+    ) -> HandlerResult:
         operation_id, items = self._trash_manager.stage(matches)
         if self._enable_undo:
             self._record_operation("delete", items, operation_id=operation_id)
         return HandlerResult(
             success=True,
             message=f"Deleted {len(items)} item(s) to Stoat trash.",
-            details={"action": intent.action.value, "count": len(items), "items": items},
+            details={
+                "action": intent.action.value,
+                "count": len(items),
+                "items": items,
+                "search_roots": [str(root) for root in search_roots or []],
+                "requested_targets": intent.target_items or [intent.target],
+            },
         )
+
+    def _resolve_named_delete_targets(
+        self,
+        intent: Intent,
+        *,
+        base_dir: Path,
+        context: ExecutionContext,
+    ) -> tuple[list[Path], list[Path], HandlerResult | None]:
+        resolved: list[Path] = []
+        search_roots: list[Path] = self._file_system.resolve_search_roots(
+            base_dir=base_dir,
+            home=context.home,
+            filters=intent.filters,
+            explicit_source=bool(intent.source),
+        )
+        ambiguous: list[dict[str, object]] = []
+        missing: list[str] = []
+
+        for item in intent.target_items or []:
+            matches, _ = self._file_system.search_matches(
+                item,
+                base_dir=base_dir,
+                home=context.home,
+                filters=intent.filters,
+                explicit_source=bool(intent.source),
+            )
+            if not matches:
+                missing.append(item)
+                continue
+            if len(matches) > 1:
+                ambiguous.append(
+                    {
+                        "query": item,
+                        "matches": [
+                            {"path": str(match.path), "score": match.score} for match in matches[:5]
+                        ],
+                    }
+                )
+                continue
+            resolved.append(matches[0].path.resolve())
+
+        if ambiguous:
+            return [], search_roots, HandlerResult(
+                success=False,
+                message="Multiple files matched one or more delete targets. Please be more specific.",
+                details={
+                    "action": intent.action.value,
+                    "error_code": ErrorCode.AMBIGUOUS_TARGET.value,
+                    "ambiguous_targets": ambiguous,
+                    "search_roots": [str(root) for root in search_roots],
+                    "filters": intent.filters.model_dump() if intent.filters else None,
+                },
+            )
+
+        if missing:
+            return [], search_roots, HandlerResult(
+                success=False,
+                message=f"No files matched: {', '.join(missing)}.",
+                details={
+                    "action": intent.action.value,
+                    "error_code": ErrorCode.NOT_FOUND.value,
+                    "missing_targets": missing,
+                    "search_roots": [str(root) for root in search_roots],
+                    "filters": intent.filters.model_dump() if intent.filters else None,
+                },
+            )
+
+        deduped = list(dict.fromkeys(resolved))
+        return deduped, search_roots, None
 
     def _undo_last_operation(self) -> HandlerResult:
         if not self._enable_undo:

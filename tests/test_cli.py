@@ -224,10 +224,12 @@ def test_cli_doctor_json_output(monkeypatch, sample_files) -> None:
     assert payload["action"] == "doctor"
     assert payload["data"]["config_valid"] is True
     assert payload["data"]["config_exists"] is False
+    assert payload["data"]["status"] == "warning"
     assert "config_path" in payload["data"]
     assert "log_path" in payload["data"]
     assert payload["data"]["log_path_writable"] is True
     assert payload["data"]["undo_path_writable"] is True
+    assert payload["data"]["warnings"] == ["Config file does not exist; Stoat is using defaults."]
 
 
 def test_cli_invalid_config_returns_config_error(monkeypatch, sample_files) -> None:
@@ -281,9 +283,41 @@ def test_cli_doctor_text_output(monkeypatch, sample_files) -> None:
 
     assert result.exit_code == 0
     assert "stoat doctor summary" in result.stdout.lower()
+    assert "status: warning" in result.stdout.lower()
     assert "config path:" in result.stdout.lower()
     assert "log writable:" in result.stdout.lower()
     assert "undo writable:" in result.stdout.lower()
+    assert "warnings:" in result.stdout.lower()
+
+
+def test_cli_doctor_reports_unwritable_runtime_paths(monkeypatch, sample_files) -> None:
+    monkeypatch.chdir(sample_files)
+    monkeypatch.setenv("STOAT_CONFIG_PATH", str(sample_files / ".config" / "stoat" / "config.toml"))
+    monkeypatch.setattr(
+        "stoat.cli.Config.load",
+        classmethod(lambda cls, config_path=None: _test_config(sample_files)),
+    )
+
+    def _fake_path_probe(path, *, directory):
+        if str(path).endswith("stoat.log") or directory:
+            return {"path": str(path), "exists": False, "writable": False}
+        return {"path": str(path), "exists": False, "writable": True}
+
+    monkeypatch.setattr("stoat.cli._path_probe", _fake_path_probe)
+
+    result = runner.invoke(app, ["doctor", "--json"])
+
+    payload = json.loads(result.stdout)
+
+    assert result.exit_code == 0
+    assert payload["data"]["status"] == "warning"
+    assert (
+        "Log path is not writable; structured logs may be dropped." in payload["data"]["warnings"]
+    )
+    assert (
+        "Undo path is not writable; undo/history reliability may degrade."
+        in payload["data"]["warnings"]
+    )
 
 
 def test_cli_history_empty_state(monkeypatch, sample_files) -> None:

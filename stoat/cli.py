@@ -177,6 +177,18 @@ def _path_probe(path: Path, *, directory: bool) -> dict[str, bool | str]:
     }
 
 
+def _collect_doctor_warnings(diagnostics: dict[str, bool | str]) -> list[str]:
+    """Collect user-facing runtime warnings from doctor diagnostics."""
+    warnings: list[str] = []
+    if not diagnostics["config_exists"]:
+        warnings.append("Config file does not exist; Stoat is using defaults.")
+    if not diagnostics["log_path_writable"]:
+        warnings.append("Log path is not writable; structured logs may be dropped.")
+    if not diagnostics["undo_path_writable"]:
+        warnings.append("Undo path is not writable; undo/history reliability may degrade.")
+    return warnings
+
+
 def _build_doctor_diagnostics(config: Config) -> dict[str, bool | str]:
     config_path = Config.resolve_path()
     log_path = Path(config.logging.file).expanduser()
@@ -202,12 +214,17 @@ def _build_doctor_diagnostics(config: Config) -> dict[str, bool | str]:
             "undo_path_writable": bool(_path_probe(undo_path, directory=True)["writable"]),
         }
     )
+    warnings = _collect_doctor_warnings(diagnostics)
+    diagnostics["status"] = "warning" if warnings else "ok"
+    diagnostics["warnings"] = warnings
     return diagnostics
 
 
 def _render_doctor_summary(diagnostics: dict[str, bool | str]) -> None:
     """Print a readable text-mode diagnostics summary."""
-    console.print("[bold green]Stoat doctor summary[/bold green]")
+    status_style = "bold yellow" if diagnostics["status"] == "warning" else "bold green"
+    console.print(f"[{status_style}]Stoat doctor summary[/{status_style}]")
+    console.print(f"Status: {diagnostics['status']}")
     console.print(f"Config path: {diagnostics['config_path']}")
     console.print(f"Config exists: {diagnostics['config_exists']}")
     console.print(f"Platform: {diagnostics['platform']}")
@@ -217,6 +234,11 @@ def _render_doctor_summary(diagnostics: dict[str, bool | str]) -> None:
     console.print(f"Undo path: {diagnostics['undo_path']}")
     console.print(f"Undo writable: {diagnostics['undo_path_writable']}")
     console.print(f"Ollama available: {diagnostics['llm_backend_available']}")
+    warnings = diagnostics.get("warnings", [])
+    if isinstance(warnings, list) and warnings:
+        console.print("[bold yellow]Warnings:[/bold yellow]")
+        for warning in warnings:
+            console.print(f"- {warning}")
 
 
 def _summarize_confirmation(intent: Intent, context: ExecutionContext) -> str:

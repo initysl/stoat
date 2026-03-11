@@ -12,8 +12,15 @@ stoat run "<your request>"
 
 ```bash
 stoat run "open firefox"
-stoat run "open chrome"
 stoat run "close firefox"
+stoat run "find report"
+stoat run "find my latest download"
+stoat run --dry-run "move report.pdf from Downloads to Documents"
+stoat run "copy report.txt from source to backup"
+stoat run "delete old.log from logs"
+stoat history
+stoat undo --yes
+stoat doctor
 ```
 
 ## Confirmation Behavior
@@ -35,5 +42,6 @@ uv run stoat run "<your request>"
 
 ## Notes
 
-- Parsing is currently rule-based for launch and close intents.
-- Unknown requests return a guidance message.
+- Parsing is currently rule-based and deterministic.
+- Optional LLM support is not required for the current release.
+- Unknown requests return a guidance message instead of guessing.

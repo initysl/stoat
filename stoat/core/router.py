@@ -48,5 +48,7 @@ class CommandRouter:
             details={
                 "action": intent.action.value,
                 "error_code": ErrorCode.ROUTER_NO_HANDLER.value,
+                "target": intent.target,
+                "target_type": intent.target_type.value,
             },
         )

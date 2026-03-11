@@ -4,42 +4,43 @@
 
 - Linux (Ubuntu 22.04+, Fedora 39+, Arch, etc.)
 - Python 3.11 or higher
-- Ollama
+- `uv` for from-source development, or `pip` for installed usage
 
-## Step-by-Step Installation
+## Install Stoat
 
-### 1. Install Ollama
-```bash
-curl -fsSL https://ollama.ai/install.sh | sh
-```
+### Installed usage
 
-### 2. Download LLM Model
-```bash
-ollama pull llama3.2:3b-instruct-q4_K_M
-```
-
-### 3. Install Stoat
-
-**For normal use:**
 ```bash
 pip install stoat
 ```
 
-Then run:
+Optional LLM backend support:
 ```bash
-stoat version
+pip install "stoat[llm]"
 ```
 
-**For development from source:**
+Verify the install:
 ```bash
-git clone https://github.com/yourusername/stoat.git
+stoat version
+stoat doctor
+```
+
+### Development from source
+
+```bash
+git clone https://github.com/initysl/stoat.git
 cd stoat
 uv sync --extra dev
 ```
 
-### 4. Verify Installation
+Optional local LLM dependencies during development:
 ```bash
-uv run stoat version
+uv sync --extra dev --extra llm
 ```
 
-You're ready to go! 🦡
+Verify the development setup:
+```bash
+uv run stoat version
+uv run pytest -q
+uv build
+```

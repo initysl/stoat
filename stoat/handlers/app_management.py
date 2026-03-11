@@ -38,7 +38,9 @@ class AppManagementHandler(BaseHandler):
                     "action": intent.action.value,
                     "target": intent.target,
                     "pid": result.pid,
-                    "error_code": (None if result.success else ErrorCode.APP_LAUNCH_FAILED.value),
+                    **result.details,
+                    "error_code": result.error_code
+                    or (None if result.success else ErrorCode.APP_LAUNCH_FAILED.value),
                 },
             )
 
@@ -49,6 +51,8 @@ class AppManagementHandler(BaseHandler):
             details={
                 "action": intent.action.value,
                 "target": intent.target,
-                "error_code": None if result.success else ErrorCode.APP_CLOSE_FAILED.value,
+                **result.details,
+                "error_code": result.error_code
+                or (None if result.success else ErrorCode.APP_CLOSE_FAILED.value),
             },
         )

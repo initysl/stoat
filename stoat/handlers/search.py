@@ -34,6 +34,8 @@ class SearchHandler(BaseHandler):
                 details={
                     "action": intent.action.value,
                     "error_code": ErrorCode.NOT_FOUND.value,
+                    "count": 0,
+                    "target": intent.target,
                     "matches": [],
                     "filters": intent.filters.model_dump() if intent.filters else None,
                 },

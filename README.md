@@ -1,60 +1,58 @@
-# Stoat 🦡 
+# Stoat
 
-**Offline AI Assistant for Linux** - Smart, Quick, Local
+**Safe local Linux operations engine** with a natural-language CLI.
 
-Stoat is a privacy-first, offline AI assistant for Linux that lets you control your system using natural language. No cloud, no telemetry, just fast local processing.
+Stoat turns short English requests into constrained local actions like finding files, moving/copying/deleting them safely, launching apps, undoing Stoat-managed changes, and showing recent history. It is terminal-first, Linux-only, and designed around confirmation, auditability, and reversible operations.
 
 ## Features
 
-- 🔒 **100% Offline** - All processing happens locally on your machine
-- ⚡ **Fast** - Powered by optimized local LLM (Llama 3.2 3B)
-- 🎯 **Precise** - Advanced intent parsing for accurate command execution
-- 🛡️ **Safe** - Built-in safety checks and confirmations for destructive operations
-- 🔄 **Undo** - Roll back file operations with full undo support
+- Safe local file operations with confirmation, protected paths, and batch limits
+- Natural-language file search with rule-based parsing
+- App launch and close support for Linux desktop workflows
+- Undo and history for Stoat-managed reversible operations
+- Pretty JSON output for scripting and future integrations
+- Optional diagnostics with `stoat doctor`
 
 ## Quick Start
 
 ### Prerequisites
 
+- Linux
 - Python 3.11+
-- [Ollama](https://ollama.ai) installed and running
 
 ### Installation
 ```bash
-# Install Ollama and download model
-curl -fsSL https://ollama.ai/install.sh | sh
-ollama pull llama3.2:3b-instruct-q4_K_M
-
 # Install Stoat for normal use
 pip install stoat
 ```
 
+Optional LLM support is not required for the current rule-based product. If you want the optional parser backend later:
+```bash
+pip install "stoat[llm]"
+```
+
 ### Usage
 ```bash
-# Launch an application
 stoat run "open firefox"
-
-# Find files
-stoat run "find my tax documents from last year"
-
-# Organize files
-stoat run "move all PDFs from Downloads to Documents"
-
-# Close applications
-stoat run "close all chrome windows"
-
-# Check system info
-stoat run "what's using all my RAM?"
+stoat run "find my latest download"
+stoat run --dry-run "move report.pdf from Downloads to Documents"
+stoat run "delete old.log from logs"
+stoat history
+stoat undo --yes
+stoat doctor
 ```
 
 ### From Source
 ```bash
-git clone https://github.com/yourusername/stoat.git
+git clone https://github.com/initysl/stoat.git
 cd stoat
 uv sync --extra dev
 
 # Run from the project environment while developing
 uv run stoat run "find report"
+
+# Optional local LLM support while developing
+uv sync --extra dev --extra llm
 ```
 
 ## Documentation
@@ -68,15 +66,11 @@ uv run stoat run "find report"
 
 ## Development
 ```bash
-# Setup development environment
 uv sync --extra dev
-
-# Run tests
 uv run pytest -q
-
-# Format code
-uv run black stoat tests config setup.py
-uv run ruff check
+uv run ruff check stoat tests
+uv run black --check stoat tests
+uv build
 ```
 
 ## License

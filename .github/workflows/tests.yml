@@ -9,6 +9,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      UV_LINK_MODE: copy
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
@@ -29,6 +31,16 @@ jobs:
 
     - name: Run tests
       run: uv run pytest --cov=stoat --cov-report=xml
-    
+
+    - name: Build package
+      run: uv build
+
+    - name: Smoke test wheel install
+      run: |
+        uv venv .venv-smoke
+        uv pip install --python .venv-smoke/bin/python dist/*.whl
+        .venv-smoke/bin/stoat version
+        .venv-smoke/bin/stoat doctor --json
+
     - name: Upload coverage
       uses: codecov/codecov-action@v3

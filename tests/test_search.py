@@ -33,6 +33,30 @@ def test_search_handler_returns_matches(sample_files) -> None:
     assert any(match["path"].endswith("document.pdf") for match in result.details["matches"])
 
 
+def test_search_handler_no_match_reports_standard_failure_payload(temp_dir) -> None:
+    handler = SearchHandler(
+        search_engine=SearchEngine(index_hidden_files=False, max_results=10),
+        file_system=FileSystem(
+            search_engine=SearchEngine(index_hidden_files=False, max_results=10)
+        ),
+    )
+    context = ExecutionContext(cwd=temp_dir, home=temp_dir)
+    intent = Intent(
+        action=IntentAction.FIND,
+        target_type=TargetType.FILE,
+        target="missing-file",
+        confidence=0.9,
+        raw_text="find missing-file",
+    )
+
+    result = handler.handle(intent, context)
+
+    assert result.success is False
+    assert result.details["error_code"] == "not_found"
+    assert result.details["count"] == 0
+    assert result.details["target"] == "missing-file"
+
+
 def test_search_handler_applies_extension_filter(temp_dir) -> None:
     (temp_dir / "report.pdf").write_text("pdf")
     (temp_dir / "report.txt").write_text("txt")

@@ -1,100 +1,72 @@
-# Stoat Execution Roadmap
+# Stoat Roadmap
 
-This roadmap is ordered to keep momentum while preventing architecture drift.
+This roadmap reflects the current repository state rather than the original recovery plan.
 
-## Phase 1: MVP Command Loop (Complete in this branch)
+## Current Status
 
-Goal: make `stoat run "<text>"` execute at least one real action safely.
+### Complete
 
-Steps:
-1. Implement parser for launch/close app intents.
-2. Route intents to an app-management handler.
-3. Integrate Linux process launching and stopping.
-4. Add confirmation gate for risky actions.
-5. Add unit and integration tests for this vertical slice.
+- Core command loop
+- Rule-based parser and intent schema
+- App launch and close
+- File search
+- Move, copy, delete, undo, and history
+- Dry-run previews
+- Initial system-info commands for disk, memory, and battery status
+- Structured JSON output
+- Diagnostics and structured logging
 
-Exit criteria:
-- `stoat run "open firefox"` attempts launch.
-- `stoat run "close firefox"` asks confirmation by default.
-- Parser, safety, and routing tests pass.
+### In Progress
 
-## Phase 2: File Operations + Undo
+- Release hardening
+- Documentation cleanup
 
-Goal: safe local file manipulation (move/copy/delete) with rollback support.
+### Not Started
 
-Steps:
-1. Implement `file_operations` handler with strict argument validation.
-2. Add path safety checks via protected paths and allowlists.
-3. Build trash-based delete and operation journal in `undo_stack`.
-4. Add undo command: `stoat undo`.
-5. Add batch operation limits and dry-run mode.
+- Broader post-MVP capabilities
+- Optional LLM fallback as a product enhancement
 
-Exit criteria:
-- Move/copy/delete intents work on test fixtures.
-- Undo restores last destructive file operation.
-- Protected paths cannot be modified.
+## Next Milestones
 
-## Phase 3: Search and Indexing
+## Phase A: Release Candidate
 
-Goal: reliable file/app search with consistent ranking and filters.
-
-Steps:
-1. Implement search integration (`locate` fallback to filesystem scan).
-2. Add fuzzy matcher scoring and type/date filters.
-3. Standardize response formatting for top-N results.
-4. Add performance benchmarks on large directories.
+Goal: make `v0.1.0` credible and easy to install.
 
 Exit criteria:
-- Search queries return ranked relevant results.
-- Hidden-file and result-limit config values are enforced.
+- Docs match the actual CLI behavior.
+- Build and smoke-install checks pass consistently.
+- Changelog and release workflow are in place.
 
-## Phase 4: LLM-Assisted Intent Parsing
+## Phase B: Safe System Information Expansion
 
-Goal: support broader language while preserving deterministic safety.
+Goal: expand the current read-only system-info slice with broader Linux diagnostics.
 
-Steps:
-1. Keep rule-based parser as primary fast path.
-2. Add Ollama-backed parser fallback for unknown intents.
-3. Validate LLM output against strict intent schema.
-4. Add confidence threshold and clarification prompts.
-5. Log parser decisions for debugging.
+Candidate commands:
+- `stoat run "show disk usage"`
+- `stoat run "what's using my ram"`
+- `stoat run "battery status"`
 
-Exit criteria:
-- Unknown intents can resolve through Ollama with schema-safe output.
-- Unsafe/ambiguous intents are rejected or require clarification.
+Next additions:
+- CPU usage
+- network status
+- process-list queries
+- service-status queries
 
-## Phase 5: Observability and Reliability
+## Phase C: Search and Parser Growth
 
-Goal: production quality behavior and diagnosability.
+Goal: make file search feel more natural without giving up determinism.
 
-Steps:
-1. Implement structured logging and rotating log files.
-2. Add command history with replay metadata.
-3. Add error taxonomy and user-facing remediation messages.
-4. Add property tests for parser and safety boundaries.
-5. Add CI gates for lint, typing, tests, and coverage threshold.
+Focus areas:
+- more temporal phrases
+- better path and location inference
+- better file-type groupings
+- clarification for ambiguous requests
 
-Exit criteria:
-- Failures are actionable from logs.
-- CI blocks regressions on parsing and safety logic.
+## Phase D: Optional LLM Enhancement
 
-## Phase 6: Packaging and Release
+Goal: improve long-tail natural-language understanding without making LLM support mandatory.
 
-Goal: make installation and updates predictable for users.
-
-Steps:
-1. Finalize package metadata (authors, repo URL, classifiers).
-2. Add semantic versioning and changelog process.
-3. Publish signed releases to PyPI and GitHub Releases.
-4. Validate installation on Ubuntu/Fedora/Arch matrices.
-
-Exit criteria:
-- Release pipeline produces installable artifacts.
-- `pip install stoat` and `stoat version` work on clean machines.
-
-## Suggested Weekly Cadence
-
-1. Week 1: Phase 2 core + tests.
-2. Week 2: Phase 2 undo hardening + Phase 3 baseline search.
-3. Week 3: Phase 4 LLM fallback with strict schema validation.
-4. Week 4: Phase 5/6 release hardening and public alpha.
+Constraints:
+- Stoat must remain usable without any LLM
+- rule parser stays the primary path
+- all LLM output must still pass validation and safety checks

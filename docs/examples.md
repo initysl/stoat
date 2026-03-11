@@ -1,36 +1,51 @@
 # Usage Examples
 
-## File Operations
+These examples reflect the currently implemented CLI behavior.
+
+## File Search
+
 ```bash
-# Find files
-stoat run "find my resume"
-stoat run "find PDFs modified last week"
+stoat run "find report"
+stoat run "find pdf files"
+stoat run "find my latest download"
+stoat run "where did i save my screenshot"
+stoat run --json "i saved a file named abc, find it"
+```
 
-# Move files
-stoat run "move all screenshots to Pictures"
-stoat run "move *.mp4 from Downloads to Videos"
+## File Operations
 
-# Copy files
-stoat run "copy project folder to backup drive"
-
-# Delete files
-stoat run "delete all files older than 6 months in Downloads"
+```bash
+stoat run --dry-run "move report.pdf from Downloads to Documents"
+stoat run "copy report.txt from source to backup"
+stoat run "delete old.log from logs"
+stoat undo --yes
+stoat history
 ```
 
 ## Application Management
-```bash
-# Launch apps
-stoat run "open firefox"
-stoat run "start my coding setup"
 
-# Close apps
-stoat run "close chrome"
-stoat run "close all development apps"
+```bash
+stoat run "open firefox"
+stoat run --yes "close firefox"
+stoat run --json "open definitely-not-a-real-app"
+```
+
+## Diagnostics
+
+```bash
+stoat doctor
+stoat doctor --json
 ```
 
 ## System Information
+
 ```bash
-stoat run "what's using all my RAM?"
-stoat run "show disk space"
-stoat run "is docker running?"
+stoat run "show disk usage"
+stoat run "what's using my ram"
+stoat run "battery status"
 ```
+
+## Notes
+
+- Broad or unsupported requests return a guidance message instead of guessing.
+- Optional LLM support is not required for the current release.

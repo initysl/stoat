@@ -122,6 +122,23 @@ def test_cli_json_output_is_stable(monkeypatch, sample_files) -> None:
     assert payload["data"]["count"] >= 1
 
 
+def test_cli_system_info_json_output(monkeypatch, sample_files) -> None:
+    monkeypatch.chdir(sample_files)
+    monkeypatch.setattr(
+        "stoat.cli.Config.load",
+        classmethod(lambda cls, config_path=None: _test_config(sample_files)),
+    )
+
+    result = runner.invoke(app, ["run", "--json", "show disk usage"])
+
+    payload = json.loads(result.stdout)
+
+    assert result.exit_code == 0
+    assert payload["ok"] is True
+    assert payload["action"] == "system_info"
+    assert payload["data"]["target"] == "disk_usage"
+
+
 def test_cli_dry_run_does_not_modify_files(monkeypatch, sample_files) -> None:
     monkeypatch.chdir(sample_files)
     monkeypatch.setattr(

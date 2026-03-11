@@ -166,6 +166,33 @@ def test_parse_help_me_find_spreadsheet_i_edited_yesterday() -> None:
     assert intent.filters.modified_within_days == 2
 
 
+def test_parse_show_disk_usage() -> None:
+    engine = NLPEngine(enable_llm_fallback=False)
+
+    intent = engine.parse("show disk usage")
+
+    assert intent.action == IntentAction.SYSTEM_INFO
+    assert intent.target == "disk_usage"
+
+
+def test_parse_whats_using_my_ram() -> None:
+    engine = NLPEngine(enable_llm_fallback=False)
+
+    intent = engine.parse("what's using my ram")
+
+    assert intent.action == IntentAction.SYSTEM_INFO
+    assert intent.target == "memory_usage"
+
+
+def test_parse_battery_status() -> None:
+    engine = NLPEngine(enable_llm_fallback=False)
+
+    intent = engine.parse("battery status")
+
+    assert intent.action == IntentAction.SYSTEM_INFO
+    assert intent.target == "battery_status"
+
+
 def test_llm_fallback_used_for_unknown_command(monkeypatch) -> None:
     engine = NLPEngine(enable_llm_fallback=True)
 

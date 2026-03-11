@@ -18,6 +18,9 @@ stoat run "find my latest download"
 stoat run --dry-run "move report.pdf from Downloads to Documents"
 stoat run "copy report.txt from source to backup"
 stoat run "delete old.log from logs"
+stoat run "show disk usage"
+stoat run "what's using my ram"
+stoat run "battery status"
 stoat history
 stoat undo --yes
 stoat doctor

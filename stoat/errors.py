@@ -23,6 +23,7 @@ class ErrorCode(str, Enum):
     INVALID_APP_COMMAND = "invalid_app_command"
     APP_NOT_FOUND = "app_not_found"
     APP_NOT_RUNNING = "app_not_running"
+    SYSTEM_INFO_UNAVAILABLE = "system_info_unavailable"
     UNDO_DISABLED = "undo_disabled"
     NOTHING_TO_UNDO = "nothing_to_undo"
     UNSUPPORTED_UNDO = "unsupported_undo"

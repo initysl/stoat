@@ -21,8 +21,10 @@ from stoat.errors import ErrorCode
 from stoat.handlers.app_management import AppManagementHandler
 from stoat.handlers.file_operations import FileOperationsHandler
 from stoat.handlers.search import SearchHandler
+from stoat.handlers.system_info import SystemInfoHandler
 from stoat.integrations.file_system import FileSystem
 from stoat.integrations.search_engine import SearchEngine
+from stoat.integrations.system_info import SystemInfoIntegration
 from stoat.integrations.trash_manager import TrashManager
 from stoat.observability import configure_logging, log_event
 from stoat.safety.confirmation import ConfirmationPrompt
@@ -62,6 +64,7 @@ def _build_router(config: Config) -> CommandRouter:
         handlers=[
             AppManagementHandler(),
             SearchHandler(search_engine=search_engine, file_system=file_system),
+            SystemInfoHandler(integration=SystemInfoIntegration()),
             file_handler,
         ]
     )

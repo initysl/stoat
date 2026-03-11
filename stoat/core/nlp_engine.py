@@ -119,6 +119,17 @@ SEMANTIC_ALIASES: dict[str, object | None] = {
     "downloads": None,
 }
 
+SYSTEM_INFO_PATTERNS: tuple[tuple[str, str], ...] = (
+    (r"^(?:show|check)\s+disk(?:\s+usage|\s+space)?$", "disk_usage"),
+    (r"^disk(?:\s+usage|\s+space)$", "disk_usage"),
+    (r"^(?:show\s+)?(?:memory|ram)\s+usage$", "memory_usage"),
+    (r"^what(?:'s| is)\s+using(?:\s+all)?\s+my\s+ram$", "memory_usage"),
+    (r"^what(?:'s| is)\s+using(?:\s+all)?\s+my\s+memory$", "memory_usage"),
+    (r"^(?:show\s+)?battery\s+status$", "battery_status"),
+    (r"^what(?:'s| is)\s+my\s+battery(?:\s+status)?$", "battery_status"),
+    (r"^how\s+much\s+battery\s+do\s+i\s+have$", "battery_status"),
+)
+
 
 class NLPEngine:
     """Natural language parser for Stoat commands."""
@@ -192,6 +203,16 @@ class NLPEngine:
                 raw_text=text,
             )
 
+        system_info_target = self._parse_system_info_target(text)
+        if system_info_target is not None:
+            return Intent(
+                action=IntentAction.SYSTEM_INFO,
+                target_type=TargetType.SYSTEM,
+                target=system_info_target,
+                confidence=0.96,
+                raw_text=text,
+            )
+
         find_phrase = self._extract_find_phrase(text)
         if find_phrase is not None:
             target, filters, source = self._parse_find_query(find_phrase)
@@ -253,6 +274,12 @@ class NLPEngine:
             confidence=0.0,
             raw_text=text,
         )
+
+    def _parse_system_info_target(self, text: str) -> str | None:
+        for pattern, target in SYSTEM_INFO_PATTERNS:
+            if re.match(pattern, text, flags=re.IGNORECASE):
+                return target
+        return None
 
     def _parse_with_llm(self, user_command: str) -> Intent | None:
         try:

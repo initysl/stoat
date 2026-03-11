@@ -9,6 +9,7 @@ Stoat turns short English requests into constrained local actions like finding f
 - Safe local file operations with confirmation, protected paths, and batch limits
 - Natural-language file search with rule-based parsing
 - App launch and close support for Linux desktop workflows
+- Read-only system information for disk, memory, and battery status
 - Undo and history for Stoat-managed reversible operations
 - Pretty JSON output for scripting and future integrations
 - Optional diagnostics with `stoat doctor`
@@ -37,6 +38,8 @@ stoat run "open firefox"
 stoat run "find my latest download"
 stoat run --dry-run "move report.pdf from Downloads to Documents"
 stoat run "delete old.log from logs"
+stoat run "show disk usage"
+stoat run "what's using my ram"
 stoat history
 stoat undo --yes
 stoat doctor

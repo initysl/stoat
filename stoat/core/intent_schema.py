@@ -18,6 +18,7 @@ class IntentAction(str, Enum):
     COPY = "copy"
     DELETE = "delete"
     UNDO = "undo"
+    SYSTEM_INFO = "system_info"
 
 
 class TargetType(str, Enum):
@@ -27,6 +28,7 @@ class TargetType(str, Enum):
     FILE = "file"
     FOLDER = "folder"
     APPLICATION = "application"
+    SYSTEM = "system"
 
 
 class FileFilters(BaseModel):

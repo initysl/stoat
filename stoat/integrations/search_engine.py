@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+import re
 
 from stoat.core.intent_schema import FileFilters
 
@@ -36,13 +37,16 @@ class SearchEngine:
         filters: FileFilters | None = None,
     ) -> list[SearchMatch]:
         matches_by_path: dict[Path, SearchMatch] = {}
-        for base_dir in base_dirs:
+        total_roots = len(base_dirs)
+        for index, base_dir in enumerate(base_dirs):
+            root_bonus = max(0, (total_roots - index) * 5)
             if not base_dir.exists():
                 continue
             for match in self._search_in_root(base_dir, query, filters):
+                boosted = SearchMatch(path=match.path, score=match.score + root_bonus)
                 current = matches_by_path.get(match.path)
-                if current is None or match.score > current.score:
-                    matches_by_path[match.path] = match
+                if current is None or boosted.score > current.score:
+                    matches_by_path[match.path] = boosted
 
         matches = list(matches_by_path.values())
         self._sort_matches(matches, filters)
@@ -149,19 +153,37 @@ class SearchEngine:
         name = path.name.lower()
         stem = path.stem.lower()
         full_path = str(path).lower()
+        normalized_needle = self._normalize_token(needle)
+        normalized_name = self._normalize_token(name)
+        normalized_stem = self._normalize_token(stem)
 
         if name == needle:
             return 120
         if stem == needle:
             return 110
+        if normalized_name == normalized_needle:
+            return 108
+        if normalized_stem == normalized_needle:
+            return 104
         if name.startswith(needle):
             return 95
         if stem.startswith(needle):
             return 90
+        if normalized_name.startswith(normalized_needle):
+            return 88
+        if normalized_stem.startswith(normalized_needle):
+            return 84
         if needle in name:
             return 80
         if needle in stem:
             return 75
+        if normalized_needle in normalized_name:
+            return 72
+        if normalized_needle in normalized_stem:
+            return 68
         if needle in full_path:
             return 50
         return 0
+
+    def _normalize_token(self, value: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "", value.lower())

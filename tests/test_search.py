@@ -202,3 +202,45 @@ def test_search_handler_uses_preferred_roots_as_hints(temp_dir: Path) -> None:
     assert len(result.details["matches"]) == 2
     assert any(match["path"].endswith("Avengers.mp4") for match in result.details["matches"])
     assert any(match["path"].endswith("Power Rangers.mp4") for match in result.details["matches"])
+
+
+def test_search_handler_uses_configured_fallback_roots(temp_dir: Path) -> None:
+    workspace = temp_dir / "workspace"
+    downloads = temp_dir / "Downloads"
+    workspace.mkdir()
+    downloads.mkdir()
+    (downloads / "invoice.pdf").write_text("pdf")
+
+    search_engine = SearchEngine(index_hidden_files=False, max_results=10)
+    handler = SearchHandler(
+        search_engine=search_engine,
+        file_system=FileSystem(
+            search_engine=search_engine,
+            fallback_roots=["~/Downloads"],
+        ),
+    )
+    context = ExecutionContext(cwd=workspace, home=temp_dir)
+    intent = Intent(
+        action=IntentAction.FIND,
+        target_type=TargetType.FILE,
+        target="invoice",
+        filters=FileFilters(category="document", extensions=[".pdf"]),
+        confidence=0.9,
+        raw_text="find invoice",
+    )
+
+    result = handler.handle(intent, context)
+
+    assert result.success is True
+    assert result.details["matches"][0]["path"].endswith("invoice.pdf")
+    assert str(downloads) in result.details["search_roots"]
+
+
+def test_search_engine_normalized_name_ranks_better(temp_dir: Path) -> None:
+    (temp_dir / "Power Rangers.mp4").write_text("main")
+    (temp_dir / "Power-Rangers-Extended.mp4").write_text("alt")
+
+    engine = SearchEngine(index_hidden_files=False, max_results=10)
+    matches = engine.search(temp_dir, "power rangers")
+
+    assert matches[0].path.name == "Power Rangers.mp4"

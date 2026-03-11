@@ -16,6 +16,7 @@ index_hidden_files = false
 max_results = 50
 use_locate = true
 fuzzy_threshold = 0.6
+fallback_roots = []
 
 [logging]
 level = "INFO"

@@ -8,6 +8,7 @@ These examples reflect the currently implemented CLI behavior.
 stoat run "find report"
 stoat run "find pdf files"
 stoat run "find my latest download"
+stoat run "find all my movies"
 stoat run "where did i save my screenshot"
 stoat run --json "i saved a file named abc, find it"
 ```
@@ -16,11 +17,23 @@ stoat run --json "i saved a file named abc, find it"
 
 ```bash
 stoat run --dry-run "move report.pdf from Downloads to Documents"
+stoat run --dry-run "move my latest screenshot to Desktop"
+stoat run "copy all my movies to archive"
 stoat run "copy report.txt from source to backup"
+stoat run "delete the movie avengers"
 stoat run "delete old.log from logs"
 stoat undo --yes
 stoat history
 ```
+
+## Ambiguity Resolution
+
+```bash
+stoat run "delete the movie avengers"
+```
+
+If multiple files match, Stoat shows numbered options in text mode and lets you choose one path
+before continuing. In JSON mode it returns candidate matches and copy-pasteable suggestions.
 
 ## Application Management
 

@@ -20,6 +20,7 @@ from stoat.core.parser_backends import create_llm_backend
 from stoat.core.router import CommandRouter
 from stoat.errors import ErrorCode
 from stoat.handlers.app_management import AppManagementHandler
+from stoat.handlers.base import HandlerResult
 from stoat.handlers.file_operations import FileOperationsHandler
 from stoat.handlers.search import SearchHandler
 from stoat.handlers.system_info import SystemInfoHandler
@@ -28,7 +29,7 @@ from stoat.integrations.search_engine import SearchEngine
 from stoat.integrations.system_info import SystemInfoIntegration
 from stoat.integrations.trash_manager import TrashManager
 from stoat.observability import configure_logging, log_event
-from stoat.safety.confirmation import ConfirmationPrompt
+from stoat.safety.confirmation import ConfirmationPrompt, SelectionPrompt
 from stoat.safety.permissions import PermissionGuard
 from stoat.safety.validator import SafetyValidator
 from stoat.utils.undo_stack import UndoStack
@@ -51,7 +52,10 @@ def _build_router(config: Config) -> CommandRouter:
         index_hidden_files=config.search.index_hidden_files,
         max_results=config.search.max_results,
     )
-    file_system = FileSystem(search_engine=search_engine)
+    file_system = FileSystem(
+        search_engine=search_engine,
+        fallback_roots=config.search.fallback_roots,
+    )
     undo_path = Path(config.undo.storage_path)
     file_handler = FileOperationsHandler(
         file_system=file_system,
@@ -293,6 +297,76 @@ def _summarize_delete_preview(intent: Intent, preview_details: dict) -> str:
     return f"{heading}\n{body}{suffix}"
 
 
+def _clarify_ambiguous_intent(
+    intent: Intent,
+    result_details: dict,
+) -> Intent | None:
+    ambiguous_targets = result_details.get("ambiguous_targets")
+    if not isinstance(ambiguous_targets, list) or not ambiguous_targets:
+        return None
+
+    selector = SelectionPrompt()
+    selected_paths: list[str] = []
+    for entry in ambiguous_targets:
+        if not isinstance(entry, dict):
+            return None
+        matches = entry.get("matches")
+        query = entry.get("query", "target")
+        if not isinstance(matches, list) or not matches:
+            return None
+        options = [
+            str(match["path"])
+            for match in matches
+            if isinstance(match, dict) and match.get("path")
+        ]
+        if not options:
+            return None
+        choice = selector.choose(f"Choose the file to use for '{query}'", options)
+        if choice is None:
+            return None
+        selected_paths.append(choice)
+
+    if not selected_paths:
+        return None
+
+    return intent.model_copy(
+        update={
+            "target": selected_paths[0] if len(selected_paths) == 1 else "*",
+            "target_items": selected_paths,
+            "filters": None,
+            "source": None,
+        }
+    )
+
+
+def _route_with_clarification(
+    intent: Intent,
+    *,
+    context: ExecutionContext,
+    router: CommandRouter,
+    json_output: bool,
+    logger: logging.Logger,
+    command: str,
+) -> tuple[Intent, HandlerResult]:
+    result = router.route(intent, context)
+    if (
+        not json_output
+        and not result.success
+        and result.details.get("error_code") == ErrorCode.AMBIGUOUS_TARGET.value
+    ):
+        clarified_intent = _clarify_ambiguous_intent(intent, result.details)
+        if clarified_intent is not None:
+            log_event(
+                logger,
+                "clarification.selected",
+                command=command,
+                action=intent.action.value,
+                selected_targets=clarified_intent.target_items or [clarified_intent.target],
+            )
+            return clarified_intent, router.route(clarified_intent, context)
+    return intent, result
+
+
 def _execute_intent(
     intent: Intent,
     *,
@@ -324,7 +398,14 @@ def _execute_intent(
     if safety.requires_confirmation(intent) and not (context.skip_confirmations or context.dry_run):
         summary = _summarize_confirmation(intent, context)
         if intent.action == IntentAction.DELETE:
-            preview_result = router.route(intent, context.as_dry_run())
+            intent, preview_result = _route_with_clarification(
+                intent,
+                context=context.as_dry_run(),
+                router=router,
+                json_output=json_output,
+                logger=logger,
+                command=command,
+            )
             if not preview_result.success:
                 log_event(
                     logger,
@@ -374,7 +455,14 @@ def _execute_intent(
         log_event(logger, "confirmation.accepted", command=command, action=intent.action.value)
         context = context.with_confirmation()
 
-    result = router.route(intent, context)
+    intent, result = _route_with_clarification(
+        intent,
+        context=context,
+        router=router,
+        json_output=json_output,
+        logger=logger,
+        command=command,
+    )
     log_event(
         logger,
         "execution.result",

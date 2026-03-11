@@ -68,7 +68,11 @@ index_hidden_files = false
 max_results = 50
 use_locate = true
 fuzzy_threshold = 0.6
+fallback_roots = []
 ```
+
+`fallback_roots` are optional broader locations Stoat can search when semantic queries do not
+resolve from the current working directory or category-preferred roots.
 
 ### `logging`
 
@@ -104,6 +108,7 @@ index_hidden_files = false
 max_results = 20
 use_locate = false
 fuzzy_threshold = 0.6
+fallback_roots = ["~/Downloads", "~/Documents", "~/Videos"]
 
 [logging]
 level = "INFO"

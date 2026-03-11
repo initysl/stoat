@@ -65,6 +65,7 @@ class SearchConfig(BaseModel):
     max_results: int = Field(default=50, gt=0)
     use_locate: bool = True
     fuzzy_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
+    fallback_roots: list[str] = []
 
 
 class LoggingConfig(BaseModel):

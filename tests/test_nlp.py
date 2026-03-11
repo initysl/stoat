@@ -284,6 +284,19 @@ def test_parse_copy_all_my_movies_to_archive() -> None:
     assert intent.filters.category == "video"
 
 
+def test_parse_move_latest_screenshot_to_desktop() -> None:
+    engine = NLPEngine(enable_llm_fallback=False)
+
+    intent = engine.parse("move my latest screenshot to desktop")
+
+    assert intent.action == IntentAction.MOVE
+    assert intent.destination == "desktop"
+    assert intent.filters is not None
+    assert intent.filters.name_contains == "screenshot"
+    assert intent.filters.sort_by == "modified"
+    assert intent.filters.limit == 1
+
+
 def test_llm_fallback_used_for_unknown_command(monkeypatch) -> None:
     engine = NLPEngine(
         parser_mode="hybrid",

@@ -268,6 +268,27 @@ def test_cli_json_ambiguous_semantic_delete_returns_suggestions(monkeypatch, tem
     assert payload["error"]["details"]["ambiguous_targets"][0]["suggestions"]
 
 
+def test_cli_interactive_clarification_can_complete_delete(monkeypatch, temp_dir) -> None:
+    videos = temp_dir / "Videos"
+    downloads = temp_dir / "Downloads"
+    videos.mkdir()
+    downloads.mkdir()
+    target = videos / "Avengers.mp4"
+    target.write_text("movie")
+    (downloads / "Avengers.mkv").write_text("movie")
+
+    monkeypatch.chdir(temp_dir)
+    monkeypatch.setattr(
+        "stoat.cli.Config.load",
+        classmethod(lambda cls, config_path=None: _test_config(temp_dir)),
+    )
+
+    result = runner.invoke(app, ["run", "delete the movie avengers"], input="2\ny\n")
+
+    assert result.exit_code == 0
+    assert target.exists() is False
+
+
 def test_cli_doctor_json_output(monkeypatch, sample_files) -> None:
     monkeypatch.chdir(sample_files)
     monkeypatch.setenv("STOAT_CONFIG_PATH", str(sample_files / ".config" / "stoat" / "config.toml"))

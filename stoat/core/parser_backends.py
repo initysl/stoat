@@ -435,6 +435,8 @@ class RuleParserBackend(ParserBackend):
     ) -> tuple[str, FileFilters | None, list[str] | None]:
         query = self._clean_target_phrase(value)
         filters = FileFilters()
+        query = self._apply_recency_terms(query, filters)
+        query = self._apply_modified_terms(query, filters)
         lowered = query.lower()
 
         semantic_match = self._extract_semantic_category_query(lowered, filters)

@@ -305,6 +305,10 @@ class FileOperationsHandler(BaseHandler):
         missing: list[str] = []
 
         for item in intent.target_items or []:
+            exact_target = self._file_system.resolve_exact_target(item, base_dir=base_dir)
+            if exact_target is not None:
+                resolved.append(exact_target)
+                continue
             matches, _ = self._file_system.search_matches(
                 item,
                 base_dir=base_dir,

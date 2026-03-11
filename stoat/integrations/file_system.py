@@ -12,8 +12,13 @@ from stoat.integrations.search_engine import SearchEngine
 class FileSystem:
     """Encapsulates path resolution and local file mutations."""
 
-    def __init__(self, search_engine: SearchEngine | None = None) -> None:
+    def __init__(
+        self,
+        search_engine: SearchEngine | None = None,
+        fallback_roots: list[str] | None = None,
+    ) -> None:
         self._search_engine = search_engine or SearchEngine()
+        self._fallback_roots = fallback_roots or []
 
     def resolve_path(self, raw_path: str | None, *, cwd: Path, home: Path) -> Path:
         if not raw_path:
@@ -74,13 +79,27 @@ class FileSystem:
         if (
             not matches
             and not explicit_source
-            and filters
-            and filters.preferred_roots
-            and home not in search_roots
+            and self._fallback_roots
         ):
-            search_roots = [*search_roots, home]
+            fallback_roots = [
+                self.resolve_path(raw_root, cwd=home, home=home)
+                for raw_root in self._fallback_roots
+            ]
+            search_roots = [
+                *search_roots,
+                *[root for root in fallback_roots if root not in search_roots],
+            ]
             matches = self._search_engine.search_many(search_roots, target, filters)
         return matches, search_roots
+
+    def resolve_exact_target(self, target: str, *, base_dir: Path) -> Path | None:
+        explicit = Path(target).expanduser()
+        if explicit.is_absolute() and explicit.exists():
+            return explicit.resolve()
+        relative_candidate = (base_dir / target).expanduser()
+        if relative_candidate.exists():
+            return relative_candidate.resolve()
+        return None
 
     def resolve_targets(
         self,
@@ -91,13 +110,9 @@ class FileSystem:
         filters: FileFilters | None = None,
         explicit_source: bool,
     ) -> list[Path]:
-        explicit = Path(target).expanduser()
-        if explicit.is_absolute() and explicit.exists():
-            return [explicit.resolve()]
-
-        relative_candidate = (base_dir / target).expanduser()
-        if relative_candidate.exists():
-            return [relative_candidate.resolve()]
+        exact_target = self.resolve_exact_target(target, base_dir=base_dir)
+        if exact_target is not None:
+            return [exact_target]
 
         matches, _ = self.search_matches(
             target,

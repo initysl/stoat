@@ -63,6 +63,8 @@ uv sync --extra dev --extra llm
 - [Execution Roadmap](docs/roadmap.md)
 - [Configuration](docs/configuration.md)
 - [Safety Features](docs/safety.md)
+- [Release Process](docs/releasing.md)
+- [Changelog](CHANGELOG.md)
 
 ## Development
 ```bash
@@ -79,4 +81,4 @@ MIT License - See [LICENSE](LICENSE) for details
 
 ## Contributing
 
-Contributions welcome! Please read our contributing guidelines first.
+Contributions welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first.

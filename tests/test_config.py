@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from stoat.config import Config, LoggingConfig, ParserConfig, SafetyConfig, SearchConfig
+from stoat.config import Config, LLMConfig, LoggingConfig, ParserConfig, SafetyConfig, SearchConfig
 
 
 def test_logging_config_rejects_unknown_level() -> None:
@@ -32,3 +32,8 @@ def test_config_resolve_path_honors_env_override(monkeypatch, tmp_path) -> None:
 def test_parser_config_rejects_unknown_mode() -> None:
     with pytest.raises(ValueError):
         ParserConfig(mode="regex-forever")
+
+
+def test_llm_config_rejects_unknown_provider() -> None:
+    with pytest.raises(ValueError):
+        LLMConfig(provider="magic")

@@ -38,12 +38,17 @@ Optional parser-backend settings. The current CLI works without any LLM.
 
 ```toml
 [llm]
+provider = "ollama"
 model = "llama3.2:3b-instruct-q4_K_M"
 base_url = "http://localhost:11434"
 temperature = 0.1
 max_tokens = 512
 timeout = 30
 ```
+
+Currently supported providers:
+
+- `ollama`
 
 ### `safety`
 

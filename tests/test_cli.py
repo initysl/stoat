@@ -7,7 +7,7 @@ import sys
 
 from click.testing import CliRunner
 
-from stoat.cli import _resolve_skip_confirmations, app
+from stoat.cli import _build_parser, _resolve_skip_confirmations, app
 from stoat.config import (
     Config,
     LLMConfig,
@@ -148,6 +148,17 @@ def test_cli_system_info_json_output(monkeypatch, sample_files) -> None:
     assert payload["data"]["target"] == "disk_usage"
 
 
+def test_build_parser_uses_configured_mode_and_provider(sample_files) -> None:
+    config = _test_config(sample_files)
+    config.parser.mode = "hybrid"
+    config.llm.provider = "ollama"
+
+    parser = _build_parser(config)
+
+    assert parser.parser_mode == "hybrid"
+    assert parser.llm_provider == "ollama"
+
+
 def test_cli_dry_run_does_not_modify_files(monkeypatch, sample_files) -> None:
     monkeypatch.chdir(sample_files)
     monkeypatch.setattr(
@@ -251,6 +262,8 @@ def test_cli_doctor_json_output(monkeypatch, sample_files) -> None:
     assert payload["data"]["config_valid"] is True
     assert payload["data"]["config_exists"] is False
     assert payload["data"]["status"] == "warning"
+    assert payload["data"]["parser_mode"] == "rule"
+    assert payload["data"]["llm_provider"] == "ollama"
     assert "config_path" in payload["data"]
     assert "log_path" in payload["data"]
     assert payload["data"]["log_path_writable"] is True
@@ -311,6 +324,8 @@ def test_cli_doctor_text_output(monkeypatch, sample_files) -> None:
     assert "stoat doctor summary" in result.stdout.lower()
     assert "status: warning" in result.stdout.lower()
     assert "config path:" in result.stdout.lower()
+    assert "parser mode:" in result.stdout.lower()
+    assert "llm provider:" in result.stdout.lower()
     assert "log writable:" in result.stdout.lower()
     assert "undo writable:" in result.stdout.lower()
     assert "warnings:" in result.stdout.lower()

@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from stoat.core.intent_schema import Intent, IntentAction, LowConfidenceError
-from stoat.core.parser_backends import HybridParser, LLMParserBackend, RuleParserBackend
+from stoat.core.parser_backends import (
+    HybridParser,
+    ParserBackend,
+    RuleParserBackend,
+    create_llm_backend,
+)
 
 
 class NLPEngine:
@@ -17,15 +22,18 @@ class NLPEngine:
         enable_llm_fallback: bool = True,
         parser_mode: str | None = None,
         rule_backend: RuleParserBackend | None = None,
-        llm_backend: LLMParserBackend | None = None,
+        llm_backend: ParserBackend | None = None,
+        llm_provider: str = "ollama",
     ) -> None:
         self.model = model
         self.confidence_threshold = confidence_threshold
         self.temperature = temperature
         self.enable_llm_fallback = enable_llm_fallback
         self.parser_mode = parser_mode or ("hybrid" if enable_llm_fallback else "rule")
+        self.llm_provider = llm_provider
         self.rule_backend = rule_backend or RuleParserBackend()
-        self.llm_backend = llm_backend or LLMParserBackend(
+        self.llm_backend = llm_backend or create_llm_backend(
+            self.llm_provider,
             model=self.model,
             temperature=self.temperature,
         )

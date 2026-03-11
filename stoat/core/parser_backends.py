@@ -139,6 +139,14 @@ class ParserBackend(ABC):
         """Return a parsed intent or None when unavailable."""
 
 
+def create_llm_backend(provider: str, *, model: str, temperature: float) -> ParserBackend:
+    """Create a semantic parser backend for the configured provider."""
+    normalized = provider.lower()
+    if normalized == "ollama":
+        return LLMParserBackend(model=model, temperature=temperature)
+    raise ValueError(f"Unsupported LLM provider: {provider}")
+
+
 class HybridParser:
     """Policy object that prefers deterministic parsing and falls back semantically."""
 

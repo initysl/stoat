@@ -11,11 +11,20 @@ from stoat.core.intent_schema import IntentAction
 
 
 class LLMConfig(BaseModel):
+    provider: str = "ollama"
     model: str = "llama3.2:3b-instruct-q4_K_M"
     base_url: str = "http://localhost:11434"
     temperature: float = Field(default=0.1, ge=0.0, le=2.0)
     max_tokens: int = Field(default=512, gt=0)
     timeout: int = Field(default=30, gt=0)
+
+    @field_validator("provider")
+    @classmethod
+    def validate_provider(cls, value: str) -> str:
+        normalized = value.lower()
+        if normalized not in {"ollama"}:
+            raise ValueError("LLM provider must be one of: ollama")
+        return normalized
 
 
 class ParserConfig(BaseModel):

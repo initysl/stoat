@@ -16,6 +16,7 @@ from stoat.config import Config
 from stoat.core.context import ExecutionContext
 from stoat.core.intent_schema import Intent, IntentAction, TargetType
 from stoat.core.nlp_engine import NLPEngine
+from stoat.core.parser_backends import create_llm_backend
 from stoat.core.router import CommandRouter
 from stoat.errors import ErrorCode
 from stoat.handlers.app_management import AppManagementHandler
@@ -71,12 +72,19 @@ def _build_router(config: Config) -> CommandRouter:
 
 
 def _build_parser(config: Config) -> NLPEngine:
+    llm_backend = create_llm_backend(
+        config.llm.provider,
+        model=config.llm.model,
+        temperature=config.llm.temperature,
+    )
     return NLPEngine(
         model=config.llm.model,
         temperature=config.llm.temperature,
         confidence_threshold=config.parser.confidence_threshold,
         enable_llm_fallback=config.parser.mode == "hybrid",
         parser_mode=config.parser.mode,
+        llm_backend=llm_backend,
+        llm_provider=config.llm.provider,
     )
 
 
@@ -202,6 +210,8 @@ def _build_doctor_diagnostics(config: Config) -> dict[str, bool | str]:
         "config_valid": True,
         "config_path": str(config_path),
         "config_exists": config_path.exists(),
+        "parser_mode": config.parser.mode,
+        "llm_provider": config.llm.provider,
         "platform": platform.platform(),
         "python_version": platform.python_version(),
         "cwd": str(Path.cwd()),
@@ -231,6 +241,8 @@ def _render_doctor_summary(diagnostics: dict[str, bool | str]) -> None:
     console.print(f"Status: {diagnostics['status']}")
     console.print(f"Config path: {diagnostics['config_path']}")
     console.print(f"Config exists: {diagnostics['config_exists']}")
+    console.print(f"Parser mode: {diagnostics['parser_mode']}")
+    console.print(f"LLM provider: {diagnostics['llm_provider']}")
     console.print(f"Platform: {diagnostics['platform']}")
     console.print(f"Python: {diagnostics['python_version']}")
     console.print(f"Log path: {diagnostics['log_path']}")

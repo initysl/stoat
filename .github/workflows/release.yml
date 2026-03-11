@@ -25,14 +25,7 @@ jobs:
     - name: Verify tag matches package version
       run: |
         TAG_VERSION="${GITHUB_REF_NAME#v}"
-        PACKAGE_VERSION=$(python3 - <<'PY'
-from pathlib import Path
-import tomllib
-
-data = tomllib.loads(Path("pyproject.toml").read_text())
-print(data["project"]["version"])
-PY
-)
+        PACKAGE_VERSION=$(python3 -c 'from pathlib import Path; import tomllib; print(tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"])')
         test "$TAG_VERSION" = "$PACKAGE_VERSION"
 
     - name: Verify changelog contains release heading

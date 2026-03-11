@@ -338,3 +338,70 @@ def test_semantic_delete_resolves_multiple_movie_targets(temp_dir) -> None:
     assert result.success is True
     assert avengers.exists() is False
     assert power_rangers.exists() is False
+
+
+def test_semantic_move_resolves_single_movie_match(temp_dir) -> None:
+    videos = temp_dir / "Videos"
+    destination = temp_dir / "backup"
+    videos.mkdir()
+    destination.mkdir()
+    movie = videos / "Avengers.mp4"
+    movie.write_text("assembled")
+
+    handler = _build_handler(temp_dir)
+    context = ExecutionContext(cwd=temp_dir, home=temp_dir).with_confirmation()
+    intent = Intent(
+        action=IntentAction.MOVE,
+        target_type=TargetType.FILE,
+        target="avengers",
+        target_items=["avengers"],
+        destination=str(destination),
+        filters=FileFilters(
+            category="video",
+            extensions=[".mp4", ".mkv", ".avi", ".mov", ".webm"],
+            preferred_roots=["~/Videos", "~/Downloads", "~/Desktop"],
+        ),
+        confidence=0.95,
+        raw_text="move the movie avengers to backup",
+        requires_confirmation=True,
+    )
+
+    result = handler.handle(intent, context)
+
+    assert result.success is True
+    assert movie.exists() is False
+    assert (destination / "Avengers.mp4").exists() is True
+
+
+def test_semantic_copy_reports_ambiguous_target(temp_dir) -> None:
+    videos = temp_dir / "Videos"
+    downloads = temp_dir / "Downloads"
+    destination = temp_dir / "archive"
+    videos.mkdir()
+    downloads.mkdir()
+    destination.mkdir()
+    (videos / "Avengers.mp4").write_text("movie")
+    (downloads / "Avengers.mkv").write_text("movie")
+
+    handler = _build_handler(temp_dir)
+    context = ExecutionContext(cwd=temp_dir, home=temp_dir)
+    intent = Intent(
+        action=IntentAction.COPY,
+        target_type=TargetType.FILE,
+        target="avengers",
+        target_items=["avengers"],
+        destination=str(destination),
+        filters=FileFilters(
+            category="video",
+            extensions=[".mp4", ".mkv", ".avi", ".mov", ".webm"],
+            preferred_roots=["~/Videos", "~/Downloads", "~/Desktop"],
+        ),
+        confidence=0.95,
+        raw_text="copy the movie avengers to archive",
+    )
+
+    result = handler.handle(intent, context)
+
+    assert result.success is False
+    assert result.details["error_code"] == "ambiguous_target"
+    assert result.details["requested_targets"] == ["avengers"]

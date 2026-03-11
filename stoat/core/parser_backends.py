@@ -185,7 +185,7 @@ SEMANTIC_ALIASES: dict[str, object | None] = {
     "downloads": None,
 }
 
-DELETE_FILLER_PHRASES: tuple[str, ...] = (
+TARGET_FILLER_PHRASES: tuple[str, ...] = (
     r"\b(named|called)\b",
     r"\bwith\s+(?:the\s+)?name\b",
     r"\bwith\s+this(?:\s+this)?\s+name\b",
@@ -311,12 +311,15 @@ class RuleParserBackend(ParserBackend):
             pattern = rf"^{verbs}\s+(.+?)(?:\s+from\s+(.+?))?\s+to\s+(.+)$"
             match = re.match(pattern, text, flags=re.IGNORECASE)
             if match:
+                target, filters, target_items = self._parse_file_action_query(match.group(1))
                 return Intent(
                     action=action,
                     target_type=TargetType.FILE,
-                    target=self._normalize_file_query(match.group(1)),
+                    target=target,
+                    target_items=target_items,
                     source=self._clean_target_phrase(match.group(2)) if match.group(2) else None,
                     destination=self._clean_target_phrase(match.group(3)),
+                    filters=filters,
                     requires_confirmation=action == IntentAction.MOVE,
                     confidence=0.94,
                     raw_text=text,
@@ -328,7 +331,7 @@ class RuleParserBackend(ParserBackend):
             flags=re.IGNORECASE,
         )
         if delete_match:
-            target, filters, target_items = self._parse_delete_query(delete_match.group(1))
+            target, filters, target_items = self._parse_file_action_query(delete_match.group(1))
             return Intent(
                 action=IntentAction.DELETE,
                 target_type=TargetType.FILE,
@@ -426,7 +429,7 @@ class RuleParserBackend(ParserBackend):
         normalized = self._normalize_file_query(query)
         return self._finalize_find_result(normalized, filters, source)
 
-    def _parse_delete_query(
+    def _parse_file_action_query(
         self,
         value: str,
     ) -> tuple[str, FileFilters | None, list[str] | None]:
@@ -437,6 +440,14 @@ class RuleParserBackend(ParserBackend):
         semantic_match = self._extract_semantic_category_query(lowered, filters)
         if semantic_match is not None:
             target, target_items = semantic_match
+            if (
+                target == "*"
+                and target_items is None
+                and filters.extension is not None
+                and filters.category is None
+                and filters.name_contains is None
+            ):
+                return f"*{filters.extension}", filters, None
             return target, filters, target_items
 
         normalized = self._normalize_file_query(query)
@@ -534,7 +545,7 @@ class RuleParserBackend(ParserBackend):
                     return None
                 raw_remainder = self._trim_noise(semantic_phrase[len(candidate) :])
                 remainder = raw_remainder
-                for pattern in DELETE_FILLER_PHRASES:
+                for pattern in TARGET_FILLER_PHRASES:
                     remainder = re.sub(pattern, "", remainder, flags=re.IGNORECASE)
                 remainder = self._trim_noise(remainder)
                 target_items = self._split_target_items(remainder)

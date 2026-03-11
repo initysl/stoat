@@ -258,6 +258,32 @@ def test_parse_delete_multiple_movie_targets() -> None:
     assert intent.filters.category == "video"
 
 
+def test_parse_move_the_movie_avengers_to_backup() -> None:
+    engine = NLPEngine(enable_llm_fallback=False)
+
+    intent = engine.parse("move the movie avengers to backup")
+
+    assert intent.action == IntentAction.MOVE
+    assert intent.target == "avengers"
+    assert intent.target_items == ["avengers"]
+    assert intent.destination == "backup"
+    assert intent.filters is not None
+    assert intent.filters.category == "video"
+
+
+def test_parse_copy_all_my_movies_to_archive() -> None:
+    engine = NLPEngine(enable_llm_fallback=False)
+
+    intent = engine.parse("copy all my movies to archive")
+
+    assert intent.action == IntentAction.COPY
+    assert intent.target == "*"
+    assert intent.target_items is None
+    assert intent.destination == "archive"
+    assert intent.filters is not None
+    assert intent.filters.category == "video"
+
+
 def test_llm_fallback_used_for_unknown_command(monkeypatch) -> None:
     engine = NLPEngine(
         parser_mode="hybrid",

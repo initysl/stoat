@@ -49,8 +49,8 @@ class FileOperationsHandler(BaseHandler):
         base_dir = self._file_system.resolve_path(intent.source, cwd=context.cwd, home=context.home)
         resolution_error: HandlerResult | None = None
         search_roots: list[Path] = [base_dir]
-        if intent.action == IntentAction.DELETE and intent.target_items:
-            matches, search_roots, resolution_error = self._resolve_named_delete_targets(
+        if intent.target_items:
+            matches, search_roots, resolution_error = self._resolve_named_targets(
                 intent,
                 base_dir=base_dir,
                 context=context,
@@ -116,7 +116,12 @@ class FileOperationsHandler(BaseHandler):
         if collision_error is not None:
             return collision_error
         if context.dry_run:
-            return self._build_dry_run_result(intent, matches, destination=destination)
+            return self._build_dry_run_result(
+                intent,
+                matches,
+                destination=destination,
+                search_roots=search_roots,
+            )
         if intent.action == IntentAction.MOVE:
             items = self._file_system.move(matches, destination)
             if self._enable_undo:
@@ -124,14 +129,26 @@ class FileOperationsHandler(BaseHandler):
             return HandlerResult(
                 success=True,
                 message=f"Moved {len(items)} item(s) to '{destination}'.",
-                details={"action": intent.action.value, "count": len(items), "items": items},
+                details={
+                    "action": intent.action.value,
+                    "count": len(items),
+                    "items": items,
+                    "search_roots": [str(root) for root in search_roots],
+                    "requested_targets": intent.target_items or [intent.target],
+                },
             )
 
         items = self._file_system.copy(matches, destination)
         return HandlerResult(
             success=True,
             message=f"Copied {len(items)} item(s) to '{destination}'.",
-            details={"action": intent.action.value, "count": len(items), "items": items},
+            details={
+                "action": intent.action.value,
+                "count": len(items),
+                "items": items,
+                "search_roots": [str(root) for root in search_roots],
+                "requested_targets": intent.target_items or [intent.target],
+            },
         )
 
     def _validate_matches(
@@ -243,6 +260,8 @@ class FileOperationsHandler(BaseHandler):
                 "dry_run": True,
                 "count": len(items),
                 "items": items,
+                "search_roots": [str(root) for root in search_roots or []],
+                "requested_targets": intent.target_items or [intent.target],
             },
         )
 
@@ -268,7 +287,7 @@ class FileOperationsHandler(BaseHandler):
             },
         )
 
-    def _resolve_named_delete_targets(
+    def _resolve_named_targets(
         self,
         intent: Intent,
         *,
@@ -311,11 +330,15 @@ class FileOperationsHandler(BaseHandler):
         if ambiguous:
             return [], search_roots, HandlerResult(
                 success=False,
-                message="Multiple files matched one or more delete targets. Please be more specific.",
+                message=(
+                    f"Multiple files matched one or more {intent.action.value} targets. "
+                    "Please be more specific."
+                ),
                 details={
                     "action": intent.action.value,
                     "error_code": ErrorCode.AMBIGUOUS_TARGET.value,
                     "ambiguous_targets": ambiguous,
+                    "requested_targets": intent.target_items,
                     "search_roots": [str(root) for root in search_roots],
                     "filters": intent.filters.model_dump() if intent.filters else None,
                 },
@@ -329,6 +352,7 @@ class FileOperationsHandler(BaseHandler):
                     "action": intent.action.value,
                     "error_code": ErrorCode.NOT_FOUND.value,
                     "missing_targets": missing,
+                    "requested_targets": intent.target_items,
                     "search_roots": [str(root) for root in search_roots],
                     "filters": intent.filters.model_dump() if intent.filters else None,
                 },

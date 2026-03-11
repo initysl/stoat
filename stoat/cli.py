@@ -258,22 +258,23 @@ def _render_doctor_summary(diagnostics: dict[str, bool | str]) -> None:
 
 
 def _summarize_confirmation(intent: Intent, context: ExecutionContext) -> str:
+    target_summary = ", ".join(intent.target_items) if intent.target_items else intent.target
     if intent.action in {IntentAction.MOVE, IntentAction.COPY}:
         source = intent.source or str(context.cwd)
         destination = intent.destination or str(context.cwd)
         return (
-            f"Confirm {intent.action.value} of '{intent.target}' "
+            f"Confirm {intent.action.value} of '{target_summary}' "
             f"from '{source}' to '{destination}'?"
         )
 
     if intent.action == IntentAction.DELETE:
         source = intent.source or str(context.cwd)
-        return f"Confirm delete of '{intent.target}' from '{source}'?"
+        return f"Confirm delete of '{target_summary}' from '{source}'?"
 
     if intent.action == IntentAction.UNDO:
         return "Confirm undo of the last Stoat-managed operation?"
 
-    return f"Confirm '{intent.action.value}' for '{intent.target}'?"
+    return f"Confirm '{intent.action.value}' for '{target_summary}'?"
 
 
 def _summarize_delete_preview(intent: Intent, preview_details: dict) -> str:

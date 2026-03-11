@@ -44,12 +44,10 @@ class FileSystem:
         if explicit_source:
             return [base_dir]
 
-        roots: list[Path] = []
+        roots: list[Path] = [base_dir]
         if filters and filters.preferred_roots:
             for raw_root in filters.preferred_roots:
                 roots.append(self.resolve_path(raw_root, cwd=home, home=home))
-
-        roots.append(base_dir)
 
         unique_roots: list[Path] = []
         seen: set[Path] = set()
@@ -75,21 +73,32 @@ class FileSystem:
             filters=filters,
             explicit_source=explicit_source,
         )
-        matches = self._search_engine.search_many(search_roots, target, filters)
-        if (
-            not matches
-            and not explicit_source
-            and self._fallback_roots
-        ):
+        primary_root = [search_roots[0]]
+        matches = self._search_engine.search_many(primary_root, target, filters)
+        if matches:
+            return matches, primary_root
+
+        preferred_roots = search_roots[1:]
+        if preferred_roots:
+            matches = self._search_engine.search_many(preferred_roots, target, filters)
+            if matches:
+                return matches, search_roots
+
+        if not explicit_source and self._fallback_roots:
             fallback_roots = [
                 self.resolve_path(raw_root, cwd=home, home=home)
                 for raw_root in self._fallback_roots
             ]
-            search_roots = [
+            searched_roots = [
                 *search_roots,
                 *[root for root in fallback_roots if root not in search_roots],
             ]
-            matches = self._search_engine.search_many(search_roots, target, filters)
+            matches = self._search_engine.search_many(
+                [root for root in searched_roots if root not in search_roots[:1]],
+                target,
+                filters,
+            )
+            return matches, searched_roots
         return matches, search_roots
 
     def resolve_exact_target(self, target: str, *, base_dir: Path) -> Path | None:

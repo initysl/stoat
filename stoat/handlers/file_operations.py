@@ -7,6 +7,7 @@ from pathlib import Path
 
 from stoat.core.context import ExecutionContext
 from stoat.core.intent_schema import Intent, IntentAction
+from stoat.errors import ErrorCode
 from stoat.handlers.base import BaseHandler, HandlerResult
 from stoat.integrations.file_system import FileSystem
 from stoat.integrations.trash_manager import TrashManager
@@ -51,7 +52,12 @@ class FileOperationsHandler(BaseHandler):
             return HandlerResult(
                 success=False,
                 message=f"No files matched '{intent.target}'.",
-                details={"action": intent.action.value, "count": 0, "matches": []},
+                details={
+                    "action": intent.action.value,
+                    "error_code": ErrorCode.NOT_FOUND.value,
+                    "count": 0,
+                    "matches": [],
+                },
             )
 
         batch_error = self._validate_matches(intent, matches, context)
@@ -72,7 +78,11 @@ class FileOperationsHandler(BaseHandler):
             return HandlerResult(
                 success=False,
                 message=f"Refusing to write to protected path '{destination}'.",
-                details={"action": intent.action.value, "path": str(destination)},
+                details={
+                    "action": intent.action.value,
+                    "error_code": ErrorCode.PROTECTED_PATH.value,
+                    "path": str(destination),
+                },
             )
         transfer_plan = self._file_system.plan_transfer(matches, destination)
         collision_error = self._validate_transfer_plan(intent, transfer_plan)
@@ -110,7 +120,11 @@ class FileOperationsHandler(BaseHandler):
                     f"Operation would affect {len(matches)} items, above the safety limit "
                     f"of {self._max_batch_size}."
                 ),
-                details={"action": intent.action.value, "count": len(matches)},
+                details={
+                    "action": intent.action.value,
+                    "error_code": ErrorCode.BATCH_LIMIT.value,
+                    "count": len(matches),
+                },
             )
 
         for path in matches:
@@ -118,7 +132,11 @@ class FileOperationsHandler(BaseHandler):
                 return HandlerResult(
                     success=False,
                     message=f"Refusing to modify protected path '{path}'.",
-                    details={"action": intent.action.value, "path": str(path)},
+                    details={
+                        "action": intent.action.value,
+                        "error_code": ErrorCode.PROTECTED_PATH.value,
+                        "path": str(path),
+                    },
                 )
 
         if (
@@ -129,7 +147,11 @@ class FileOperationsHandler(BaseHandler):
             return HandlerResult(
                 success=False,
                 message="Broad delete targets require explicit confirmation or --yes.",
-                details={"action": intent.action.value, "count": len(matches)},
+                details={
+                    "action": intent.action.value,
+                    "error_code": ErrorCode.CONFIRMATION_REQUIRED.value,
+                    "count": len(matches),
+                },
             )
 
         return None
@@ -153,6 +175,7 @@ class FileOperationsHandler(BaseHandler):
                 ),
                 details={
                     "action": intent.action.value,
+                    "error_code": ErrorCode.COLLISION.value,
                     "collisions": [str(path) for path in collisions],
                 },
             )
@@ -205,11 +228,25 @@ class FileOperationsHandler(BaseHandler):
 
     def _undo_last_operation(self) -> HandlerResult:
         if not self._enable_undo:
-            return HandlerResult(success=False, message="Undo is disabled in configuration.")
+            return HandlerResult(
+                success=False,
+                message="Undo is disabled in configuration.",
+                details={
+                    "action": IntentAction.UNDO.value,
+                    "error_code": ErrorCode.UNDO_DISABLED.value,
+                },
+            )
 
         operation = self._undo_stack.pop_last()
         if operation is None:
-            return HandlerResult(success=False, message="No Stoat operation is available to undo.")
+            return HandlerResult(
+                success=False,
+                message="No Stoat operation is available to undo.",
+                details={
+                    "action": IntentAction.UNDO.value,
+                    "error_code": ErrorCode.NOTHING_TO_UNDO.value,
+                },
+            )
 
         if operation.action == "move":
             self._file_system.undo_move(operation.items)
@@ -231,7 +268,11 @@ class FileOperationsHandler(BaseHandler):
         return HandlerResult(
             success=False,
             message=f"Undo is not implemented for '{operation.action}'.",
-            details={"action": IntentAction.UNDO.value, "undone_action": operation.action},
+            details={
+                "action": IntentAction.UNDO.value,
+                "error_code": ErrorCode.UNSUPPORTED_UNDO.value,
+                "undone_action": operation.action,
+            },
         )
 
     def _record_operation(

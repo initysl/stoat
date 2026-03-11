@@ -16,6 +16,109 @@ from stoat.core.intent_schema import (
 )
 from stoat.prompts.system_prompt import build_chat_messages
 
+RECENCY_MARKERS: tuple[tuple[str, int], ...] = (
+    ("last month", 31),
+    ("this month", 31),
+    ("last week", 7),
+    ("this week", 7),
+    ("recently", 7),
+    ("yesterday", 2),
+    ("today", 1),
+    ("recent", 7),
+)
+
+MODIFIED_PHRASES: tuple[str, ...] = ("i last modified", "last modified", "recently modified")
+
+DIRECT_FIND_PATTERN = r"^(?:find|search|locate)\s+(.+)$"
+
+CONVERSATIONAL_FIND_PATTERNS: tuple[str, ...] = (
+    r"^(?:i(?:'m| am)?\s+)?(?:looking|searching|trying)\s+for\s+(.+)$",
+    r"^(?:i(?:'m| am)?\s+)?finding\s+(.+)$",
+    r"^help me find\s+(.+)$",
+    r"^look for\s+(.+)$",
+    r"^(?:can you\s+)?find\s+me\s+(.+)$",
+    r"^where can i find\s+(.+)$",
+    r"^where did i save\s+(.+)$",
+    r"^(?:can you\s+)?show me\s+(.+)$",
+    r"^where(?:'s| is)\s+(.+)$",
+    r"^i\s+saved\s+(?:a\s+)?file\s+as\s+(.+?),\s*find\s+it$",
+    r"^i\s+saved\s+(?:a\s+)?file\s+as\s+(.+?)\s+find\s+it$",
+    r"^i\s+saved\s+(?:a\s+)?file\s+named\s+(.+?),?\s*find\s+it$",
+    r"^i\s+saved\s+(?:a\s+)?file\s+called\s+(.+?),?\s*find\s+it$",
+)
+
+SOURCE_ALIASES: tuple[tuple[str, str], ...] = (
+    ("download", "~/Downloads"),
+    ("downloads", "~/Downloads"),
+    ("documents", "~/Documents"),
+    ("docs", "~/Documents"),
+    ("pictures", "~/Pictures"),
+    ("photos", "~/Pictures"),
+    ("images", "~/Pictures"),
+    ("videos", "~/Videos"),
+    ("music", "~/Music"),
+    ("desktop", "~/Desktop"),
+)
+
+SOURCE_CLEANUPS: dict[str, tuple[str, ...]] = {
+    "~/Downloads": (r"\bmy\s+latest\s+download\b", r"\bdownloads?\b"),
+    "~/Documents": (r"\bmy\s+docs\b", r"\bdocs?\b", r"\bdocuments?\b"),
+    "~/Desktop": (r"\bdesktop\b",),
+    "~/Pictures": (r"\b(pictures?|photos?|images?)\b",),
+    "~/Videos": (r"\bvideos?\b",),
+    "~/Music": (r"\bmusic\b",),
+}
+
+GENERIC_CLEANUPS: tuple[str, ...] = (
+    r"\b(that|the)\b",
+    r"\b(i edited|i saved|saved as|named|called|edited|modified|downloaded)\b",
+    r"\bmy\b",
+    r"^(?:a|an|the)\b",
+)
+
+SEMANTIC_ALIASES: dict[str, object | None] = {
+    "doc": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
+    "docs": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
+    "document": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
+    "documents": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
+    "pdf": ".pdf",
+    "pdfs": ".pdf",
+    "image": [".png", ".jpg", ".jpeg", ".webp", ".gif"],
+    "images": [".png", ".jpg", ".jpeg", ".webp", ".gif"],
+    "photo": [".png", ".jpg", ".jpeg", ".webp", ".gif"],
+    "photos": [".png", ".jpg", ".jpeg", ".webp", ".gif"],
+    "picture": [".png", ".jpg", ".jpeg", ".webp", ".gif"],
+    "pictures": [".png", ".jpg", ".jpeg", ".webp", ".gif"],
+    "screenshot": {
+        "extensions": [".png", ".jpg", ".jpeg", ".webp", ".gif"],
+        "name_contains": "screenshot",
+    },
+    "screenshots": {
+        "extensions": [".png", ".jpg", ".jpeg", ".webp", ".gif"],
+        "name_contains": "screenshot",
+    },
+    "spreadsheet": [".xls", ".xlsx", ".csv", ".ods"],
+    "spreadsheets": [".xls", ".xlsx", ".csv", ".ods"],
+    "sheet": [".xls", ".xlsx", ".csv", ".ods"],
+    "sheets": [".xls", ".xlsx", ".csv", ".ods"],
+    "presentation": [".ppt", ".pptx", ".key", ".odp"],
+    "presentations": [".ppt", ".pptx", ".key", ".odp"],
+    "slide": [".ppt", ".pptx", ".key", ".odp"],
+    "slides": [".ppt", ".pptx", ".key", ".odp"],
+    "archive": [".zip", ".tar", ".gz", ".rar", ".7z"],
+    "archives": [".zip", ".tar", ".gz", ".rar", ".7z"],
+    "zip": ".zip",
+    "zips": ".zip",
+    "video": [".mp4", ".mov", ".mkv", ".avi", ".webm"],
+    "videos": [".mp4", ".mov", ".mkv", ".avi", ".webm"],
+    "music": [".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a"],
+    "audio": [".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a"],
+    "file": None,
+    "files": None,
+    "download": None,
+    "downloads": None,
+}
+
 
 class NLPEngine:
     """Natural language parser for Stoat commands."""
@@ -216,22 +319,11 @@ class NLPEngine:
         return query
 
     def _extract_find_phrase(self, text: str) -> str | None:
-        direct_match = re.match(r"^(?:find|search|locate)\s+(.+)$", text, flags=re.IGNORECASE)
+        direct_match = re.match(DIRECT_FIND_PATTERN, text, flags=re.IGNORECASE)
         if direct_match:
             return direct_match.group(1)
 
-        conversational_patterns = (
-            r"^(?:i(?:'m| am)?\s+)?(?:looking|searching|trying)\s+for\s+(.+)$",
-            r"^(?:i(?:'m| am)?\s+)?finding\s+(.+)$",
-            r"^(?:can you\s+)?find\s+me\s+(.+)$",
-            r"^(?:can you\s+)?show me\s+(.+)$",
-            r"^where(?:'s| is)\s+(.+)$",
-            r"^i\s+saved\s+(?:a\s+)?file\s+as\s+(.+?),\s*find\s+it$",
-            r"^i\s+saved\s+(?:a\s+)?file\s+as\s+(.+?)\s+find\s+it$",
-            r"^i\s+saved\s+(?:a\s+)?file\s+named\s+(.+?),?\s*find\s+it$",
-            r"^i\s+saved\s+(?:a\s+)?file\s+called\s+(.+?),?\s*find\s+it$",
-        )
-        for pattern in conversational_patterns:
+        for pattern in CONVERSATIONAL_FIND_PATTERNS:
             match = re.match(pattern, text, flags=re.IGNORECASE)
             if match:
                 return match.group(1)
@@ -239,84 +331,127 @@ class NLPEngine:
 
     def _parse_find_query(self, value: str) -> tuple[str, FileFilters | None, str | None]:
         query = self._clean_target_phrase(value)
-        lowered = query.lower()
         filters = FileFilters()
-        source = self._extract_source_alias(lowered)
+        source = self._extract_source_alias(query.lower())
+        query = self._apply_recency_terms(query, filters)
+        query = self._apply_modified_terms(query, filters)
+        query, source = self._strip_source_terms(query, source)
+        lowered = query.lower()
 
-        temporal_markers = (
-            ("last week", 7),
-            ("this week", 7),
-            ("recently", 7),
-            ("yesterday", 2),
-            ("today", 1),
-            ("recent", 7),
-        )
-        for phrase, days in temporal_markers:
-            if phrase in lowered:
-                lowered = re.sub(rf"\b{re.escape(phrase)}\b", "", lowered).strip()
-                query = self._clean_target_phrase(lowered)
-                filters.sort_by = "modified"
-                filters.descending = True
-                filters.modified_within_days = days
+        if self._apply_semantic_alias(lowered, filters):
+            return "*", filters, source
 
-        for phrase in ("i last modified", "last modified", "recently modified"):
-            if phrase in lowered:
-                lowered = lowered.replace(phrase, "").strip()
-                query = self._clean_target_phrase(lowered)
-                filters.sort_by = "modified"
-                filters.descending = True
+        containing_target = self._extract_containing_target(lowered, filters)
+        if containing_target is not None:
+            return containing_target, filters, source
 
+        query, extension_target = self._extract_extension_target(query, filters)
+        if extension_target is not None:
+            return extension_target, filters, source
+
+        normalized = self._normalize_file_query(query)
+        return self._finalize_find_result(normalized, filters, source)
+
+    def _extract_source_alias(self, lowered: str) -> str | None:
+        for word, path in SOURCE_ALIASES:
+            if re.search(rf"\b{word}\b", lowered):
+                return path
+        return None
+
+    def _strip_source_terms(self, query: str, source: str | None) -> tuple[str, str | None]:
+        cleaned = query
+        for pattern in SOURCE_CLEANUPS.get(source or "", ()):
+            cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
+        for pattern in GENERIC_CLEANUPS:
+            cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
+        cleaned = self._trim_noise(cleaned)
+        if source == "~/Documents" and cleaned in {"", "*"}:
+            return "docs", source
+        return cleaned or "*", source
+
+    def _apply_recency_terms(self, query: str, filters: FileFilters) -> str:
+        lowered = query.lower()
         if any(marker in lowered for marker in ("latest", "newest", "most recent")):
-            lowered = re.sub(r"\b(latest|newest|most recent)\b", "", lowered).strip()
-            query = self._clean_target_phrase(lowered)
+            query = re.sub(r"\b(latest|newest|most recent)\b", "", query, flags=re.IGNORECASE)
             filters.sort_by = "modified"
             filters.descending = True
             filters.limit = 1
 
-        query, source = self._strip_source_terms(query, source)
-        lowered = query.lower()
+        for phrase, days in RECENCY_MARKERS:
+            if re.search(rf"\b{re.escape(phrase)}\b", query, flags=re.IGNORECASE):
+                query = re.sub(rf"\b{re.escape(phrase)}\b", "", query, flags=re.IGNORECASE)
+                filters.sort_by = "modified"
+                filters.descending = True
+                filters.modified_within_days = days
 
-        document_aliases = {
-            "doc": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
-            "docs": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
-            "document": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
-            "documents": [".doc", ".docx", ".pdf", ".txt", ".md", ".rtf"],
-            "file": None,
-            "files": None,
-            "download": None,
-            "downloads": None,
-        }
+        return self._clean_target_phrase(query.lower())
 
-        if lowered in document_aliases and document_aliases[lowered]:
-            filters.extensions = document_aliases[lowered]
-            return "*", filters, source
+    def _apply_modified_terms(self, query: str, filters: FileFilters) -> str:
+        for phrase in MODIFIED_PHRASES:
+            if phrase in query.lower():
+                query = re.sub(rf"\b{re.escape(phrase)}\b", "", query, flags=re.IGNORECASE)
+                filters.sort_by = "modified"
+                filters.descending = True
+        return self._clean_target_phrase(query.lower())
 
+    def _apply_semantic_alias(self, lowered: str, filters: FileFilters) -> bool:
+        alias = SEMANTIC_ALIASES.get(lowered)
+        if isinstance(alias, list):
+            filters.extensions = alias
+            return True
+        if isinstance(alias, str):
+            filters.extension = alias
+            return True
+        if isinstance(alias, dict):
+            alias_extensions = alias.get("extensions")
+            alias_name_contains = alias.get("name_contains")
+            if isinstance(alias_extensions, list):
+                filters.extensions = [str(value) for value in alias_extensions]
+            if isinstance(alias_name_contains, str):
+                filters.name_contains = alias_name_contains
+            return True
+        return False
+
+    def _extract_containing_target(self, lowered: str, filters: FileFilters) -> str | None:
         containing_match = re.match(r"^(?:files?\s+)?containing\s+(.+)$", lowered)
-        if containing_match:
-            filters.name_contains = self._trim_noise(
-                self._clean_target_phrase(containing_match.group(1))
-            )
-            return filters.name_contains or "*", filters, source
+        if not containing_match:
+            return None
+        filters.name_contains = self._trim_noise(
+            self._clean_target_phrase(containing_match.group(1))
+        )
+        return filters.name_contains or "*"
 
+    def _extract_extension_target(
+        self,
+        query: str,
+        filters: FileFilters,
+    ) -> tuple[str, str | None]:
+        lowered = query.lower()
         extension_match = re.search(r"\b([a-z0-9]+)\s+files?$", lowered)
         if extension_match and extension_match.group(1) not in {"my", "all"}:
             filters.extension = f".{extension_match.group(1)}"
             prefix = lowered[: extension_match.start()].strip()
             if prefix in {"", "all"}:
-                return "*", filters, source
+                return query, "*"
             if prefix.startswith("containing "):
-                filters.name_contains = self._clean_target_phrase(
-                    prefix.removeprefix("containing ")
+                filters.name_contains = self._trim_noise(
+                    self._clean_target_phrase(prefix.removeprefix("containing "))
                 )
-                filters.name_contains = self._trim_noise(filters.name_contains or "")
-                return filters.name_contains or "*", filters, source
-            query = self._clean_target_phrase(prefix)
+                return query, filters.name_contains or "*"
+            return self._clean_target_phrase(prefix), None
 
         if re.fullmatch(r"\.[a-z0-9]+", lowered):
             filters.extension = lowered
-            return "*", filters, source
+            return query, "*"
 
-        normalized = self._normalize_file_query(query)
+        return query, None
+
+    def _finalize_find_result(
+        self,
+        normalized: str,
+        filters: FileFilters,
+        source: str | None,
+    ) -> tuple[str, FileFilters | None, str | None]:
         if filters.extension is None and normalized.startswith("*.") and len(normalized) > 2:
             filters.extension = normalized[1:]
             return "*", filters, source
@@ -325,39 +460,3 @@ class NLPEngine:
         if filters.name_contains or filters.extension or filters.extensions or filters.sort_by:
             return normalized, filters, source
         return normalized, None, source
-
-    def _extract_source_alias(self, lowered: str) -> str | None:
-        aliases = {
-            "download": "~/Downloads",
-            "downloads": "~/Downloads",
-            "documents": "~/Documents",
-            "docs": "~/Documents",
-            "desktop": "~/Desktop",
-        }
-        for word, path in aliases.items():
-            if re.search(rf"\b{word}\b", lowered):
-                return path
-        return None
-
-    def _strip_source_terms(self, query: str, source: str | None) -> tuple[str, str | None]:
-        cleaned = query
-        if source == "~/Downloads":
-            cleaned = re.sub(r"\bmy\s+latest\s+download\b", "", cleaned, flags=re.IGNORECASE)
-            cleaned = re.sub(r"\bdownloads?\b", "", cleaned, flags=re.IGNORECASE)
-        if source == "~/Documents":
-            cleaned = re.sub(r"\bmy\s+docs\b", "", cleaned, flags=re.IGNORECASE)
-            cleaned = re.sub(r"\bdocs?\b", "", cleaned, flags=re.IGNORECASE)
-            cleaned = re.sub(r"\bdocuments?\b", "", cleaned, flags=re.IGNORECASE)
-        if source == "~/Desktop":
-            cleaned = re.sub(r"\bdesktop\b", "", cleaned, flags=re.IGNORECASE)
-
-        cleaned = re.sub(r"\b(that|the)\b", "", cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(
-            r"\b(i edited|i saved|saved as|named|called)\b", "", cleaned, flags=re.IGNORECASE
-        )
-        cleaned = re.sub(r"\bmy\b", "", cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r"^(?:a|an|the)\b", "", cleaned, flags=re.IGNORECASE)
-        cleaned = self._trim_noise(cleaned)
-        if source == "~/Documents" and cleaned in {"", "*"}:
-            return "docs", source
-        return cleaned or "*", source

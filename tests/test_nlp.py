@@ -131,6 +131,41 @@ def test_parse_file_named_reference() -> None:
     assert intent.filters.name_contains == "tax_report"
 
 
+def test_parse_most_recent_pdf_in_downloads() -> None:
+    engine = NLPEngine(enable_llm_fallback=False)
+
+    intent = engine.parse("find the most recent pdf in downloads")
+
+    assert intent.action == IntentAction.FIND
+    assert intent.source == "~/Downloads"
+    assert intent.filters is not None
+    assert intent.filters.extension == ".pdf"
+    assert intent.filters.sort_by == "modified"
+    assert intent.filters.limit == 1
+
+
+def test_parse_where_did_i_save_my_screenshot() -> None:
+    engine = NLPEngine(enable_llm_fallback=False)
+
+    intent = engine.parse("where did i save my screenshot")
+
+    assert intent.action == IntentAction.FIND
+    assert intent.filters is not None
+    assert intent.filters.name_contains == "screenshot"
+    assert ".png" in (intent.filters.extensions or [])
+
+
+def test_parse_help_me_find_spreadsheet_i_edited_yesterday() -> None:
+    engine = NLPEngine(enable_llm_fallback=False)
+
+    intent = engine.parse("help me find the spreadsheet i edited yesterday")
+
+    assert intent.action == IntentAction.FIND
+    assert intent.filters is not None
+    assert ".xlsx" in (intent.filters.extensions or [])
+    assert intent.filters.modified_within_days == 2
+
+
 def test_llm_fallback_used_for_unknown_command(monkeypatch) -> None:
     engine = NLPEngine(enable_llm_fallback=True)
 

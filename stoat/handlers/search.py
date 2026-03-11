@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from stoat.core.context import ExecutionContext
 from stoat.core.intent_schema import Intent, IntentAction
+from stoat.errors import ErrorCode
 from stoat.handlers.base import BaseHandler, HandlerResult
 from stoat.integrations.file_system import FileSystem
 from stoat.integrations.search_engine import SearchEngine
@@ -32,6 +33,7 @@ class SearchHandler(BaseHandler):
                 message=f"No files matched '{intent.target}'.",
                 details={
                     "action": intent.action.value,
+                    "error_code": ErrorCode.NOT_FOUND.value,
                     "matches": [],
                     "filters": intent.filters.model_dump() if intent.filters else None,
                 },

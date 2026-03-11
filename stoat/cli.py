@@ -1,10 +1,14 @@
 """Main CLI interface."""
 
+import importlib.util
 import json
+import logging
+import platform
 import sys
 from pathlib import Path
 
 import click
+from pydantic import ValidationError
 from rich.console import Console
 
 from stoat import __version__
@@ -13,12 +17,14 @@ from stoat.core.context import ExecutionContext
 from stoat.core.intent_schema import Intent, IntentAction, TargetType
 from stoat.core.nlp_engine import NLPEngine
 from stoat.core.router import CommandRouter
+from stoat.errors import ErrorCode
 from stoat.handlers.app_management import AppManagementHandler
 from stoat.handlers.file_operations import FileOperationsHandler
 from stoat.handlers.search import SearchHandler
 from stoat.integrations.file_system import FileSystem
 from stoat.integrations.search_engine import SearchEngine
 from stoat.integrations.trash_manager import TrashManager
+from stoat.observability import configure_logging, log_event
 from stoat.safety.confirmation import ConfirmationPrompt
 from stoat.safety.permissions import PermissionGuard
 from stoat.safety.validator import SafetyValidator
@@ -66,8 +72,28 @@ def _build_parser(config: Config) -> NLPEngine:
         model=config.llm.model,
         temperature=config.llm.temperature,
         confidence_threshold=0.7,
-        enable_llm_fallback=True,
+        enable_llm_fallback=False,
     )
+
+
+def _load_config_or_exit(*, json_output: bool, command: str) -> Config:
+    config_path = Config.resolve_path()
+    try:
+        return Config.load(config_path)
+    except (ValidationError, ValueError) as exc:
+        _emit_result(
+            False,
+            f"Invalid configuration: {exc}",
+            {
+                "action": "config",
+                "error_code": ErrorCode.CONFIG_ERROR.value,
+                "config_path": str(config_path),
+            },
+            json_output,
+            command=command,
+            action="config",
+        )
+        raise SystemExit(1)
 
 
 def _build_json_response(
@@ -154,14 +180,21 @@ def _execute_intent(
     context: ExecutionContext,
     router: CommandRouter,
     safety: SafetyValidator,
+    logger: logging.Logger,
     json_output: bool,
     command: str,
 ) -> int:
     if intent.action == IntentAction.UNKNOWN:
+        log_event(
+            logger,
+            "intent.unknown",
+            command=command,
+            raw_text=intent.raw_text,
+        )
         _emit_result(
             False,
             'I could not map that request yet. Try: `stoat run "open firefox"`.',
-            {"action": intent.action.value, "error_code": "unknown_intent"},
+            {"action": intent.action.value, "error_code": ErrorCode.UNKNOWN_INTENT.value},
             json_output,
             command=command,
             action=intent.action.value,
@@ -170,22 +203,44 @@ def _execute_intent(
         return 1
 
     if safety.requires_confirmation(intent) and not (context.skip_confirmations or context.dry_run):
+        log_event(
+            logger,
+            "confirmation.requested",
+            command=command,
+            action=intent.action.value,
+            summary=_summarize_confirmation(intent, context),
+        )
         confirmer = ConfirmationPrompt()
         confirmed = confirmer.ask(_summarize_confirmation(intent, context))
         if not confirmed:
+            log_event(
+                logger,
+                "confirmation.cancelled",
+                command=command,
+                action=intent.action.value,
+            )
             _emit_result(
                 False,
                 "Action cancelled.",
-                {"action": intent.action.value, "error_code": "cancelled"},
+                {"action": intent.action.value, "error_code": ErrorCode.CANCELLED.value},
                 json_output,
                 command=command,
                 action=intent.action.value,
                 dry_run=context.dry_run,
             )
             return 1
+        log_event(logger, "confirmation.accepted", command=command, action=intent.action.value)
         context = context.with_confirmation()
 
     result = router.route(intent, context)
+    log_event(
+        logger,
+        "execution.result",
+        command=command,
+        action=intent.action.value,
+        success=result.success,
+        error_code=result.details.get("error_code"),
+    )
     _emit_result(
         result.success,
         result.message,
@@ -210,7 +265,8 @@ def app() -> None:
 @click.option("--json", "json_output", is_flag=True, help="Return machine-readable JSON.")
 def run(message: str, yes: bool, dry_run: bool, json_output: bool) -> None:
     """Execute a natural-language command."""
-    config = Config.load()
+    config = _load_config_or_exit(json_output=json_output, command="run")
+    logger = configure_logging(config.logging)
     context = ExecutionContext.from_runtime(
         skip_confirmations=_resolve_skip_confirmations(yes=bool(yes)),
         dry_run=dry_run,
@@ -218,14 +274,23 @@ def run(message: str, yes: bool, dry_run: bool, json_output: bool) -> None:
     parser = _build_parser(config)
     router = _build_router(config)
     safety = SafetyValidator(required_confirmations=set(config.safety.require_confirmation))
+    log_event(
+        logger,
+        "cli.run.start",
+        command="run",
+        raw_text=message,
+        dry_run=dry_run,
+        skip_confirmations=context.skip_confirmations,
+    )
 
     try:
         intent = parser.parse(message)
     except Exception as exc:
+        log_event(logger, "parser.failure", command="run", raw_text=message, error=str(exc))
         _emit_result(
             False,
             f"Failed to parse command: {exc}",
-            {"action": "parse", "error_code": "parse_error"},
+            {"action": "parse", "error_code": ErrorCode.PARSE_ERROR.value},
             json_output,
             command="run",
             action="parse",
@@ -233,16 +298,31 @@ def run(message: str, yes: bool, dry_run: bool, json_output: bool) -> None:
         )
         raise SystemExit(1)
 
-    raise SystemExit(
-        _execute_intent(
-            intent,
-            context=context,
-            router=router,
-            safety=safety,
-            json_output=json_output,
-            command="run",
-        )
+    log_event(
+        logger,
+        "parser.success",
+        command="run",
+        action=intent.action.value,
+        summary=intent.to_summary(),
     )
+    exit_code = _execute_intent(
+        intent,
+        context=context,
+        router=router,
+        safety=safety,
+        logger=logger,
+        json_output=json_output,
+        command="run",
+    )
+    log_event(
+        logger,
+        "cli.run.complete",
+        command="run",
+        action=intent.action.value,
+        exit_code=exit_code,
+        dry_run=context.dry_run,
+    )
+    raise SystemExit(exit_code)
 
 
 @app.command()
@@ -250,7 +330,8 @@ def run(message: str, yes: bool, dry_run: bool, json_output: bool) -> None:
 @click.option("--json", "json_output", is_flag=True, help="Return machine-readable JSON.")
 def undo(yes: bool, json_output: bool) -> None:
     """Undo the last Stoat-managed reversible operation."""
-    config = Config.load()
+    config = _load_config_or_exit(json_output=json_output, command="undo")
+    logger = configure_logging(config.logging)
     context = ExecutionContext.from_runtime(
         skip_confirmations=_resolve_skip_confirmations(yes=bool(yes))
     )
@@ -264,16 +345,20 @@ def undo(yes: bool, json_output: bool) -> None:
         confidence=1.0,
         raw_text="undo",
     )
-    raise SystemExit(
-        _execute_intent(
-            intent,
-            context=context,
-            router=router,
-            safety=safety,
-            json_output=json_output,
-            command="undo",
-        )
+    log_event(
+        logger, "cli.undo.start", command="undo", skip_confirmations=context.skip_confirmations
     )
+    exit_code = _execute_intent(
+        intent,
+        context=context,
+        router=router,
+        safety=safety,
+        logger=logger,
+        json_output=json_output,
+        command="undo",
+    )
+    log_event(logger, "cli.undo.complete", command="undo", exit_code=exit_code)
+    raise SystemExit(exit_code)
 
 
 @app.command()
@@ -287,12 +372,14 @@ def configure() -> None:
 @click.option("--json", "json_output", is_flag=True, help="Return machine-readable JSON.")
 def history(limit: int, json_output: bool) -> None:
     """View operation history."""
-    config = Config.load()
+    config = _load_config_or_exit(json_output=json_output, command="history")
+    logger = configure_logging(config.logging)
     undo_stack = _build_undo_stack(config)
     operations = undo_stack.list_recent(
         limit=max(limit, 0),
         retention_days=config.undo.retention_days,
     )
+    log_event(logger, "cli.history.loaded", command="history", limit=limit, count=len(operations))
     details = {
         "count": len(operations),
         "operations": [
@@ -328,6 +415,40 @@ def history(limit: int, json_output: bool) -> None:
             f"- {operation.created_at} | {operation.action} | {len(operation.items)} item(s)"
             for operation in operations
         )
+    )
+
+
+@app.command()
+@click.option("--json", "json_output", is_flag=True, help="Return machine-readable JSON.")
+def doctor(json_output: bool) -> None:
+    """Run basic runtime diagnostics."""
+    config = _load_config_or_exit(json_output=json_output, command="doctor")
+    logger = configure_logging(config.logging)
+    config_path = Config.resolve_path()
+    log_path = Path(config.logging.file).expanduser()
+    undo_path = Path(config.undo.storage_path).expanduser()
+    diagnostics = {
+        "config_valid": True,
+        "config_path": str(config_path),
+        "config_exists": config_path.exists(),
+        "platform": platform.platform(),
+        "python_version": platform.python_version(),
+        "cwd": str(Path.cwd()),
+        "home": str(Path.home()),
+        "log_path": str(log_path),
+        "log_directory_exists": log_path.parent.exists(),
+        "undo_path": str(undo_path),
+        "undo_directory_exists": undo_path.exists() or undo_path.parent.exists(),
+        "llm_backend_available": importlib.util.find_spec("ollama") is not None,
+    }
+    log_event(logger, "cli.doctor.complete", command="doctor", **diagnostics)
+    _emit_result(
+        True,
+        "Diagnostics loaded.",
+        diagnostics,
+        json_output,
+        command="doctor",
+        action="doctor",
     )
 
 

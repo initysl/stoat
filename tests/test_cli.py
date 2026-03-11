@@ -26,7 +26,7 @@ def _test_config(root) -> Config:
         search=SearchConfig(
             index_hidden_files=False, max_results=10, use_locate=False, fuzzy_threshold=0.6
         ),
-        logging=LoggingConfig(),
+        logging=LoggingConfig(file=str(root / ".stoat" / "stoat.log")),
         undo=UndoConfig(max_history=10, retention_days=7, storage_path=str(root / ".stoat")),
     )
 
@@ -204,6 +204,67 @@ def test_cli_json_failure_shape(monkeypatch, sample_files) -> None:
     assert payload["action"] == "unknown"
     assert payload["data"] is None
     assert payload["error"]["code"] == "unknown_intent"
+
+
+def test_cli_doctor_json_output(monkeypatch, sample_files) -> None:
+    monkeypatch.chdir(sample_files)
+    monkeypatch.setenv("STOAT_CONFIG_PATH", str(sample_files / ".config" / "stoat" / "config.toml"))
+    monkeypatch.setattr(
+        "stoat.cli.Config.load",
+        classmethod(lambda cls, config_path=None: _test_config(sample_files)),
+    )
+
+    result = runner.invoke(app, ["doctor", "--json"])
+
+    payload = json.loads(result.stdout)
+
+    assert result.exit_code == 0
+    assert payload["ok"] is True
+    assert payload["command"] == "doctor"
+    assert payload["action"] == "doctor"
+    assert payload["data"]["config_valid"] is True
+    assert payload["data"]["config_exists"] is False
+    assert "config_path" in payload["data"]
+    assert "log_path" in payload["data"]
+
+
+def test_cli_invalid_config_returns_config_error(monkeypatch, sample_files) -> None:
+    monkeypatch.chdir(sample_files)
+    monkeypatch.setenv("STOAT_CONFIG_PATH", str(sample_files / ".config" / "stoat" / "config.toml"))
+
+    def _raise_validation_error(cls, config_path=None):
+        raise ValueError("bad config")
+
+    monkeypatch.setattr("stoat.cli.Config.load", classmethod(_raise_validation_error))
+
+    result = runner.invoke(app, ["run", "--json", "find document"])
+
+    payload = json.loads(result.stdout)
+
+    assert result.exit_code == 1
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "config_error"
+
+
+def test_cli_writes_structured_log_events(monkeypatch, sample_files) -> None:
+    monkeypatch.chdir(sample_files)
+    monkeypatch.setattr(
+        "stoat.cli.Config.load",
+        classmethod(lambda cls, config_path=None: _test_config(sample_files)),
+    )
+
+    result = runner.invoke(app, ["run", "--json", "find test"])
+
+    log_path = sample_files / ".stoat" / "stoat.log"
+    log_lines = [json.loads(line) for line in log_path.read_text().splitlines() if line.strip()]
+    events = {entry["event"] for entry in log_lines}
+
+    assert result.exit_code == 0
+    assert "cli.run.start" in events
+    assert "parser.success" in events
+    assert "router.handler_selected" in events
+    assert "execution.result" in events
+    assert "cli.run.complete" in events
 
 
 def test_cli_history_empty_state(monkeypatch, sample_files) -> None:

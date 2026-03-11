@@ -1,5 +1,6 @@
 """Tests for search behavior."""
 
+import os
 from pathlib import Path
 import time
 
@@ -122,3 +123,22 @@ def test_search_handler_uses_source_directory(temp_dir: Path) -> None:
 
     assert result.success is True
     assert all(str(downloads) in match["path"] for match in result.details["matches"])
+
+
+def test_search_engine_respects_modified_within_days_filter(temp_dir: Path) -> None:
+    recent = temp_dir / "recent.txt"
+    older = temp_dir / "older.txt"
+    recent.write_text("recent")
+    older.write_text("old")
+    old_timestamp = time.time() - (10 * 24 * 60 * 60)
+    os.utime(older, (old_timestamp, old_timestamp))
+
+    engine = SearchEngine(index_hidden_files=False, max_results=10)
+    matches = engine.search(
+        temp_dir,
+        "txt",
+        FileFilters(modified_within_days=7),
+    )
+
+    assert any(match.path.name == "recent.txt" for match in matches)
+    assert all(match.path.name != "older.txt" for match in matches)

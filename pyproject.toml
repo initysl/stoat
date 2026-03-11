@@ -1,5 +1,5 @@
 [project]
-name = "stoat"
+name = "stoat-linux"
 version = "0.1.0"
 description = "Safe local Linux operations engine with natural-language CLI workflows"
 readme = "README.md"

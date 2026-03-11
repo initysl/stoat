@@ -11,12 +11,12 @@
 ### Installed usage
 
 ```bash
-pip install stoat
+pip install stoat-linux
 ```
 
 Optional LLM backend support:
 ```bash
-pip install "stoat[llm]"
+pip install "stoat-linux[llm]"
 ```
 
 Verify the install:

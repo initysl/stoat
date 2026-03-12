@@ -8,6 +8,11 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+    permissions:
+      id-token: write
+      contents: write
     env:
       UV_LINK_MODE: copy
     
@@ -50,8 +55,6 @@ jobs:
         .venv-smoke/bin/stoat doctor --json
 
     - name: Publish to PyPI
-      env:
-        UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
       run: uv publish
     
     - name: Create GitHub Release

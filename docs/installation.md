@@ -4,20 +4,20 @@
 
 - Linux (Ubuntu 22.04+, Fedora 39+, Arch, etc.)
 - Python 3.11 or higher
-- `uv` for from-source development, or `pip` for installed usage
+- `uv` for from-source development, or `pipx` for installed usage
 
 ## Install Stoat
 
 ### Installed usage
 
 ```bash
-pip install stoat-linux
+pipx install stoat-linux
 ```
 
 Optional LLM backend support:
 
 ```bash
-pip install "stoat-linux[llm]"
+pipx install "stoat-linux[llm]"
 ```
 
 Verify the install:

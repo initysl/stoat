@@ -5,7 +5,7 @@ description = "Safe local Linux operations engine with natural-language CLI work
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
-authors = [{ name = "Yusuf Lawal", email = "lawalyusufimp@gmail.com" }]
+authors = [{ name = "Yusuf Lawal", email = "oneysl@outlook.com" }]
 keywords = ["assistant", "linux", "cli", "automation", "files"]
 classifiers = [
   "Development Status :: 3 - Alpha",

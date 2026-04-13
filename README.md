@@ -26,13 +26,13 @@ Stoat turns short English requests into constrained local actions like finding f
 
 ```bash
 # Install Stoat for normal use
-pip install stoat-linux
+pipx install stoat-linux
 ```
 
 Optional LLM support is not required for the current rule-based product. If you want the optional parser backend later:
 
 ```bash
-pip install "stoat-linux[llm]"
+pipx install "stoat-linux[llm]"
 ```
 
 ### Usage

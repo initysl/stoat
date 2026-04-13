@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Linux (Ubuntu 22.04+, Fedora 39+, Arch, etc.)
-- Python 3.10 or higher
+- Python 3.11 or higher
 - `uv` for from-source development, or `pip` for installed usage
 
 ## Install Stoat

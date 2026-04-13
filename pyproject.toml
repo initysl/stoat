@@ -3,7 +3,7 @@ name = "stoat-linux"
 version = "0.1.1"
 description = "Safe local Linux operations engine with natural-language CLI workflows"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Yusuf Lawal", email = "lawalyusufimp@gmail.com" }]
 keywords = ["assistant", "linux", "cli", "automation", "files"]
@@ -13,8 +13,8 @@ classifiers = [
   "Intended Audience :: End Users/Desktop",
   "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
   "Topic :: Utilities",
 ]
 dependencies = [
@@ -74,7 +74,7 @@ target-version = "py311"
 extend-exclude = [".venv", ".pytest_cache", ".ruff_cache", "build", "dist"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

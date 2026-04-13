@@ -20,7 +20,7 @@ Stoat turns short English requests into constrained local actions like finding f
 ### Prerequisites
 
 - Linux
-- Python 3.10+
+- Python 3.11+
 
 ### Installation
 

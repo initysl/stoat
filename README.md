@@ -20,20 +20,23 @@ Stoat turns short English requests into constrained local actions like finding f
 ### Prerequisites
 
 - Linux
-- Python 3.11+
+- Python 3.10+
 
 ### Installation
+
 ```bash
 # Install Stoat for normal use
 pip install stoat-linux
 ```
 
 Optional LLM support is not required for the current rule-based product. If you want the optional parser backend later:
+
 ```bash
 pip install "stoat-linux[llm]"
 ```
 
 ### Usage
+
 ```bash
 stoat run "open firefox"
 stoat run "find my latest download"
@@ -51,6 +54,7 @@ stoat doctor
 ```
 
 ### From Source
+
 ```bash
 git clone https://github.com/initysl/stoat.git
 cd stoat
@@ -75,6 +79,7 @@ uv sync --extra dev --extra llm
 - [Changelog](CHANGELOG.md)
 
 ## Development
+
 ```bash
 uv sync --extra dev
 uv run pytest -q

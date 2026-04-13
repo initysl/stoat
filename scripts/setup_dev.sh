@@ -7,10 +7,10 @@ echo "Setting up Stoat development environment..."
 
 # Check Python version
 python_version=$(python3 --version | cut -d' ' -f2 | cut -d'.' -f1,2)
-required_version="3.11"
+required_version="3.10"
 
 if [ "$(printf '%s\n' "$required_version" "$python_version" | sort -V | head -n1)" != "$required_version" ]; then
-    echo "Error: Python 3.11+ required, found $python_version"
+    echo "Error: Python 3.10+ required, found $python_version"
     exit 1
 fi
 

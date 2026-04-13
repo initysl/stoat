@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Linux (Ubuntu 22.04+, Fedora 39+, Arch, etc.)
-- Python 3.11 or higher
+- Python 3.10 or higher
 - `uv` for from-source development, or `pip` for installed usage
 
 ## Install Stoat
@@ -15,11 +15,13 @@ pip install stoat-linux
 ```
 
 Optional LLM backend support:
+
 ```bash
 pip install "stoat-linux[llm]"
 ```
 
 Verify the install:
+
 ```bash
 stoat version
 stoat doctor
@@ -34,11 +36,13 @@ uv sync --extra dev
 ```
 
 Optional local LLM dependencies during development:
+
 ```bash
 uv sync --extra dev --extra llm
 ```
 
 Verify the development setup:
+
 ```bash
 uv run stoat version
 uv run pytest -q

@@ -9,7 +9,6 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ### Added
 
 - Structured JSON output across CLI commands.
-- `history` and `doctor` commands.
 - Dry-run previews for file operations.
 - Structured error codes and JSONL logging.
 - Release smoke checks in CI.
@@ -19,15 +18,22 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Rule-based parser expanded for conversational file-search requests.
 - Package metadata aligned with the current CLI-first product.
 
+## 0.1.3 - 2025-04-13
+
+### Fixed
+
+- Ollama availability check in `stoat doctor` (missing `/api/tags` endpoint)
+
 ## 0.1.2 - 2025-04-13
 
 ### Changed
 
-- Nothing
+- Moved ollama to main dependencies (was optional)
+- Added psutil as core dependency for process management
 
 ### Added
 
-- Install with pipx support
+- pipx installation support
 
 ## 0.1.1 - 2025-04-13
 

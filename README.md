@@ -35,6 +35,18 @@ Optional LLM support is not required for the current rule-based product. If you 
 pipx install "stoat-linux[llm]"
 ```
 
+## Upgrading
+
+```bash
+pipx upgrade stoat-linux
+```
+
+Check version:
+
+```bash
+stoat version
+```
+
 ### Usage
 
 ```bash

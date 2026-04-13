@@ -13,7 +13,7 @@ from stoat.core.intent_schema import IntentAction
 class LLMConfig(BaseModel):
     provider: str = "ollama"
     model: str = "qwen3:4b"
-    base_url: str = "http://localhost:11434/api/tags"
+    base_url: str = "http://localhost:11434"
     temperature: float = Field(default=0.1, ge=0.0, le=2.0)
     max_tokens: int = Field(default=512, gt=0)
     timeout: int = Field(default=30, gt=0)

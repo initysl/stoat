@@ -220,7 +220,7 @@ def _build_doctor_diagnostics(config: Config) -> dict[str, bool | str]:
         "python_version": platform.python_version(),
         "cwd": str(Path.cwd()),
         "home": str(Path.home()),
-        "llm_backend_available": importlib.util.find_spec("ollama") is not None,
+        "llm_backend_available": _check_ollama_available(config),
     }
     diagnostics.update(
         {
@@ -237,6 +237,18 @@ def _build_doctor_diagnostics(config: Config) -> dict[str, bool | str]:
     diagnostics["warnings"] = warnings
     return diagnostics
 
+def _check_ollama_available(config: Config) -> bool:
+    """Check if Ollama service is actually reachable."""
+    import httpx
+    
+    try:
+        response = httpx.get(
+            f"{config.llm.base_url}/api/tags",
+            timeout=2.0
+        )
+        return response.status_code == 200
+    except Exception:
+        return False
 
 def _render_doctor_summary(diagnostics: dict[str, bool | str]) -> None:
     """Print a readable text-mode diagnostics summary."""

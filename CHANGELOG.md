@@ -18,6 +18,16 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Rule-based parser expanded for conversational file-search requests.
 - Package metadata aligned with the current CLI-first product.
 
+## 0.1.4 - 2025-04-13
+
+### Fixed
+
+- Ollama availability check in `stoat doctor` now actually tests service connectivity (not just package presence). Removed (`/api/tags` endpoint)
+
+### Added
+
+- httpx dependency for HTTP health checks
+
 ## 0.1.3 - 2025-04-13
 
 ### Fixed

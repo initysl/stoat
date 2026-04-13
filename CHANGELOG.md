@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 ## Unreleased
 
 ### Added
+
 - Structured JSON output across CLI commands.
 - `history` and `doctor` commands.
 - Dry-run previews for file operations.
@@ -14,13 +15,24 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Release smoke checks in CI.
 
 ### Changed
+
 - Rule-based parser expanded for conversational file-search requests.
 - Package metadata aligned with the current CLI-first product.
-- Ollama support moved to an optional `llm` extra instead of a required runtime dependency.
 
-## 0.1.1 - 2026-04-13
+## 0.1.2 - 2025-04-13
+
+### Changed
+
+- Nothing
 
 ### Added
+
+- Install with pipx support
+
+## 0.1.1 - 2025-04-13
+
+### Added
+
 - Initial public alpha for Stoat as a safe local Linux operations engine.
 - Natural-language CLI for:
   - app launch and close

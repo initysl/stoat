@@ -1,6 +1,6 @@
 [project]
 name = "stoat-linux"
-version = "0.1.0"
+version = "0.1.1"
 description = "Safe local Linux operations engine with natural-language CLI workflows"
 readme = "README.md"
 requires-python = ">=3.11"

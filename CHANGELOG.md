@@ -18,7 +18,7 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 - Package metadata aligned with the current CLI-first product.
 - Ollama support moved to an optional `llm` extra instead of a required runtime dependency.
 
-## 0.1.0 - 2026-03-11
+## 0.1.1 - 2026-04-13
 
 ### Added
 - Initial public alpha for Stoat as a safe local Linux operations engine.

@@ -1,6 +1,6 @@
 # Stoat
 
-**Safe local Linux operations engine** with a natural-language CLI.
+**Safe local linux natural-language CLI operations engine**.
 
 Stoat turns short English requests into constrained local actions like finding files, moving/copying/deleting them safely, launching apps, undoing Stoat-managed changes, and showing recent history. It is terminal-first, Linux-only, and designed around confirmation, auditability, and reversible operations.
 
